@@ -1,0 +1,29 @@
+{
+    "paths": {
+        "memory_dir": "ai_memory",
+        "memory_db": "ai_memory/memory.db",
+        "memory_file": "ai_memory/MEMORY.md",
+        "daily_memory_dir": "ai_memory/daily",
+        "last_merge_file": "ai_memory/.last_merge"
+    },
+    "api": {
+        "searxng_url": "https://frp-fan.com:48295",
+        "api_key": "sk-qSCA8QloNEbThAs5Ff34Dc2fF65e42Ae9a1d5fE65d8c3f3f",
+        "base_url": "http://sakuraduck.cn:3000/v1"
+    },
+    "models": {
+        "judge_model": "glm-4-plus",
+        "answer_model": "deepseek-chat",
+        "embedding_model": "embedding-3"
+    },
+    "features": {
+        "max_fetch": 2,
+        "timezone": "Asia/Shanghai",
+        "max_history": 10
+    },
+    "memory": {
+        "merge_interval_days": 1,
+        "auto_merge_on_startup": true,
+        "merge_similarity_threshold": 0.3
+    }
+}
