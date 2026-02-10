@@ -2,6 +2,7 @@
 网络搜索功能模块
 """
 import requests
+from log import logger
 from datetime import datetime
 from bs4 import BeautifulSoup
 
@@ -55,7 +56,7 @@ def web_search(query, searxng_url, max_fetch=2):
     Returns:
         dict: 结构化搜索结果
     """
-    print(f"\n🔍 正在搜索: {query}")
+    logger.debug(f"正在搜索: {query}")
     
     try:
         # 调用 SearXNG
@@ -70,7 +71,7 @@ def web_search(query, searxng_url, max_fetch=2):
         raw_results = data.get("results", [])
         
         if not raw_results:
-            print("❌ 没有搜索结果")
+            logger.warning("没有搜索结果")
             return {
                 "success": False,
                 "query": query,
@@ -78,7 +79,7 @@ def web_search(query, searxng_url, max_fetch=2):
                 "message": "未找到相关结果"
             }
         
-        print(f"✅ 找到 {len(raw_results)} 条结果")
+        logger.debug(f"找到 {len(raw_results)} 条结果")
         
         # 结构化处理
         structured_results = []
@@ -94,14 +95,14 @@ def web_search(query, searxng_url, max_fetch=2):
             
             # 爬取前N个网页的内容
             if i < max_fetch:
-                print(f"  📄 爬取 [{i+1}]: {result['title'][:40]}...")
+                logger.debug(f"爬取 [{i+1}]: {result['title'][:40]}...")
                 content = fetch_webpage(result['url'])
                 result['content'] = content
-                print(f"     ✅ 提取 {len(content)} 字符")
+                logger.debug(f"提取 {len(content)} 字符")
             
             structured_results.append(result)
         
-        print(f"✅ 搜索完成，返回 {len(structured_results)} 条结构化结果\n")
+        logger.debug(f"搜索完成，返回 {len(structured_results)} 条结构化结果")
         
         return {
             "success": True,
@@ -111,7 +112,7 @@ def web_search(query, searxng_url, max_fetch=2):
         }
         
     except Exception as e:
-        print(f"❌ 搜索失败: {e}")
+        logger.error(f"搜索失败: {e}")
         return {
             "success": False,
             "query": query,

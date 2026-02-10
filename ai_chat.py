@@ -2,6 +2,7 @@
 AI对话核心逻辑
 """
 import json
+from log import logger
 from openai import OpenAI
 from memory.core import MemorySystem
 from memory.tools import create_memory_tools
@@ -50,11 +51,11 @@ class AIChat:
             
             # 如果提取到重要信息，保存到长期记忆
             if extracted and extracted.upper() != "NONE" and len(extracted) > 5:
-                print(f"📌 检测到重要信息，自动保存到长期记忆...")
+                logger.info(f"📌 检测到重要信息，自动保存到长期记忆...")
                 self.memory.save_memory(extracted, memory_type="long")
         
         except Exception as e:
-            print(f"⚠️  自动提取失败: {e}")
+            logger.warning(f"自动提取失败: {e}")
     
     def ask(self, question, history=None, tools=None):
         """
@@ -75,8 +76,6 @@ class AIChat:
         
         # 获取当前时间
         time_info, time_text = get_current_time_info(TIMEZONE)
-        
-        print(f"\n⏰ 系统时间：{time_info['date']} {time_info['weekday']} {time_info['time']}\n")
 
         # 获取长期记忆
         long_term_memory = self.memory.get_long_term_memory()
@@ -93,7 +92,7 @@ class AIChat:
         # 添加当前问题
         messages.append({"role": "user", "content": question})
         
-        print(f"🤖 阶段1: 用 {JUDGE_MODEL} 判断是否需要搜索...\n")
+        logger.debug(f"阶段1: 用 {JUDGE_MODEL} 判断是否需要搜索...")
         
         try:
             # 第一阶段：用快速模型判断是否需要搜索
@@ -109,8 +108,8 @@ class AIChat:
             
             # 如果AI决定不搜索，直接用快速模型回答
             if not tool_calls:
-                print(f"💡 {JUDGE_MODEL} 判断：无需搜索")
-                print(f"🤖 用 {ANSWER_MODEL} 回答...\n")
+                logger.debug(f"{JUDGE_MODEL} 判断：无需搜索")
+                logger.debug(f"用 {ANSWER_MODEL} 回答...")
                 
                 # 用强力模型重新生成回答（带历史上下文）
                 final_response = self.client.chat.completions.create(
@@ -122,7 +121,7 @@ class AIChat:
                 
             else:
                 # AI决定要搜索
-                print(f"💡 {JUDGE_MODEL} 判断：需要搜索网络")
+                logger.debug(f"{JUDGE_MODEL} 判断：需要搜索网络")
                 
                 # 显示所有工具调用
                 for tool_call in tool_calls:
@@ -130,11 +129,11 @@ class AIChat:
                     args = json.loads(tool_call.function.arguments)
                     
                     if function_name == "web_search":
-                        print(f"📝 搜索关键词: {args.get('query')}\n")
+                        logger.debug(f"搜索关键词: {args.get('query')}")
                     elif function_name == "memory_search":
-                        print(f"🧠 搜索记忆: {args.get('query')}\n")
+                        logger.debug(f"搜索记忆: {args.get('query')}")
                     elif function_name == "memory_save":
-                        print(f"💾 保存记忆: {args.get('text')[:50]}...\n")
+                        logger.info(f"保存记忆: {args.get('text')[:50]}...")
 
                 # 执行工具调用
                 messages.append(response_message)
@@ -205,11 +204,11 @@ class AIChat:
                             "tool_call_id": tool_call.id,
                             "role": "tool",
                             "name": function_name,
-                            "content": "✅ 记忆已保存"
+                            "content": "记忆已保存"
                         })
                 
                 # 第二阶段：用强力模型整合搜索结果并回答
-                print(f"🤖 阶段2: 用 {ANSWER_MODEL} 整合结果并回答...\n")
+                logger.debug(f"阶段2: 用 {ANSWER_MODEL} 整合结果并回答...")
                 
                 final_response = self.client.chat.completions.create(
                     model=ANSWER_MODEL,  # 用强力模型
@@ -235,7 +234,7 @@ class AIChat:
             return answer
             
         except Exception as e:
-            return f"❌ AI调用失败: {e}"
+            return f" AI调用失败: {e}"
     
     def update_history(self, question, answer, max_history=10):
         """更新对话历史

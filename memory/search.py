@@ -3,6 +3,7 @@
 """
 
 import json
+from log import logger
 
 class SearchEngine:
     """搜索引擎"""
@@ -36,7 +37,7 @@ class SearchEngine:
         Returns:
             [{"text": "...", "path": "...", "score": 0.85}, ...]
         """
-        print(f"🧠 搜索记忆: {query}")
+        logger.debug(f"搜索记忆: {query}")
         
         # 查询向量化
         query_embedding = self.embedding_manager.get_embedding(query)
@@ -47,7 +48,7 @@ class SearchEngine:
         rows = self.db_manager.get_all_chunks()
         
         if not rows:
-            print("💭 记忆为空")
+            logger.debug("记忆为空")
             return []
         
         # 混合评分
@@ -75,5 +76,5 @@ class SearchEngine:
         # 排序并返回
         results.sort(key=lambda x: x['score'], reverse=True)
         
-        print(f"✅ 找到 {len(results[:top_k])} 条相关记忆")
+        logger.debug(f"找到 {len(results[:top_k])} 条相关记忆")
         return results[:top_k]

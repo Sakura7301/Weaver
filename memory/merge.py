@@ -2,7 +2,7 @@
 合并整理功能模块
 """
 
-import hashlib
+from log import logger
 from datetime import datetime, timedelta
 from config import MEMORY_FILE, LAST_MERGE_FILE
 
@@ -79,25 +79,23 @@ class MergeManager:
             return merged_text
             
         except Exception as e:
-            print(f"⚠️  合并失败: {e}")
+            logger.error(f"合并失败: {e}")
             return text
     
     def deep_merge_all(self):
         """深度整理所有长期记忆（定期任务）"""
-        print("\n" + "="*80)
-        print("🔄 开始深度整理长期记忆...")
-        print("="*80)
+        logger.debug("🔄 开始深度整理长期记忆...")
         
         # 读取所有长期记忆
         content = MEMORY_FILE.read_text(encoding='utf-8')
         lines = [l.strip() for l in content.split('\n') if l.strip() and l.startswith('- ')]
         
         if len(lines) <= 1:
-            print("✅ 记忆内容很精简，无需整理")
+            logger.debug("记忆内容很精简，无需整理")
             self._update_merge_timestamp()
             return
         
-        print(f"📊 当前有 {len(lines)} 条记忆，准备整理...")
+        logger.debug(f"📊 当前有 {len(lines)} 条记忆，准备整理...")
         
         try:
             # 用 AI 深度分析并重组
@@ -156,12 +154,11 @@ class MergeManager:
             # 清空向量数据库中的长期记忆
             self.db_manager.delete_chunks_by_path("MEMORY.md")
             
-            print(f"✅ 深度整理完成！{len(lines)} 条记忆已优化")
-            print(f"📅 下次整理时间: {(datetime.now() + timedelta(days=self.merge_interval_days)).strftime('%Y-%m-%d')}")
-            print("="*80 + "\n")
+            logger.info(f"深度整理完成！{len(lines)} 条记忆已优化")
+            logger.debug(f"📅 下次整理时间: {(datetime.now() + timedelta(days=self.merge_interval_days)).strftime('%Y-%m-%d')}")
             
             # 更新整理时间戳
             self._update_merge_timestamp()
             
         except Exception as e:
-            print(f"❌ 整理失败: {e}")
+            logger.error(f"整理失败: {e}")

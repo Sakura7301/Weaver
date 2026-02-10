@@ -1,4 +1,5 @@
 import hashlib
+from log import logger
 from datetime import datetime, timedelta 
 from openai import OpenAI
 
@@ -64,7 +65,7 @@ class MemorySystem:
             similar = self.search_engine.search(text, top_k=3, min_score=self.merge_threshold)
             
             if similar:
-                print(f"⚠️  检测到 {len(similar)} 条相似记忆，智能合并中...")
+                logger.debug(f"检测到 {len(similar)} 条相似记忆，智能合并中...")
                 
                 try:
                     # 1. 智能合并
@@ -90,23 +91,23 @@ class MemorySystem:
                     
                     # 3. 写入合并后的新记忆
                     with open(MEMORY_FILE, 'a', encoding='utf-8') as f:
-                        f.write(f"\n- {merged_text} (更新于 {datetime.now().strftime('%Y-%m-%d %H:%M')})\n")
+                        f.write(f"{merged_text} (更新于 {datetime.now().strftime('%Y-%m-%d %H:%M')})")
                     
                     # 4. 删除旧向量
                     for s in similar:
                         self.db_manager.delete_chunk(s['id'])
                     
-                    print(f"✅ 已合并更新: {merged_text[:60]}...")
+                    logger.info(f"已合并更新: {merged_text[:60]}...")
                     text = merged_text
                     
                 except Exception as e:
-                    print(f"⚠️  合并失败，降级为追加模式: {e}")
+                    logger.warning(f"合并失败，降级为追加模式: {e}")
                     with open(MEMORY_FILE, 'a', encoding='utf-8') as f:
-                        f.write(f"\n- {text} (记录于 {datetime.now().strftime('%Y-%m-%d %H:%M')})\n")
+                        f.write(f"{text} (记录于 {datetime.now().strftime('%Y-%m-%d %H:%M')})")
             else:
                 # 没有相似内容，直接追加
                 with open(MEMORY_FILE, 'a', encoding='utf-8') as f:
-                    f.write(f"\n- {text} (记录于 {datetime.now().strftime('%Y-%m-%d %H:%M')})\n")
+                    f.write(f"{text} (记录于 {datetime.now().strftime('%Y-%m-%d %H:%M')})")
             
             # === 向量化并存入数据库（只有长期记忆） ===
             embedding = self.embedding_manager.get_embedding(text)
@@ -114,7 +115,7 @@ class MemorySystem:
                 chunk_id = hashlib.md5(f"{text}{datetime.now()}".encode()).hexdigest()
                 self.db_manager.save_chunk(chunk_id, "MEMORY.md", text, embedding)
             
-            print(f"💾 已保存长期记忆（已向量化）")
+            logger.info(f"已保存长期记忆（已向量化）")
                 
         else:
             # === 短期记忆：只存文件，不向量化 ===
@@ -125,9 +126,9 @@ class MemorySystem:
                 daily_file.write_text(f"# {today} 记忆日志\n\n", encoding='utf-8')
             
             with open(daily_file, 'a', encoding='utf-8') as f:
-                f.write(f"{text}\n\n")  # 保持完整上下文格式
+                f.write(f"{text}\n")  # 保持完整上下文格式
             
-            print(f"💾 已保存短期记忆（仅文件，未向量化）{daily_file}")
+            logger.debug(f"已保存短期记忆（仅文件，未向量化）{daily_file}")
     
     def search_memory(self, query, top_k=5, min_score=0.3):
         """
@@ -156,13 +157,13 @@ class MemorySystem:
         if self.should_merge():
             days = 999 if not LAST_MERGE_FILE.exists() else (datetime.now() - datetime.fromtimestamp(LAST_MERGE_FILE.stat().st_mtime)).days
             
-            print(f"\n⏰ 距离上次整理已过 {days} 天，触发自动整理...")
+            logger.debug(f"距离上次整理已过 {days} 天，触发自动整理...")
             self.deep_merge_all()
         else:
             last_merge = datetime.fromtimestamp(LAST_MERGE_FILE.stat().st_mtime)
             next_merge = last_merge + timedelta(days=self.merge_interval_days)  # 修复这里
             days_left = (next_merge - datetime.now()).days
-            print(f"✅ 记忆状态良好，下次整理: {next_merge.strftime('%Y-%m-%d')} ({days_left}天后)")
+            logger.debug(f"记忆状态良好，下次整理: {next_merge.strftime('%Y-%m-%d')} ({days_left}天后)")
     
     def get_long_term_memory(self):
         """读取完整长期记忆（用于注入上下文）"""
@@ -193,10 +194,10 @@ class MemorySystem:
     
     def auto_index(self):
         """自动索引长期记忆文件（短期记忆不索引）"""
-        print("📚 索引长期记忆...")
+        logger.debug("索引长期记忆...")
         
         if not MEMORY_FILE.exists():
-            print("⚠️  长期记忆文件不存在")
+            logger.warning("长期记忆文件不存在")
             return
         
         content = MEMORY_FILE.read_text(encoding='utf-8')
@@ -220,4 +221,4 @@ class MemorySystem:
                 if embedding:
                     self.db_manager.save_chunk(para_hash, "MEMORY.md", para_clean, embedding)
         
-        print(f"✅ 已索引 {len(paragraphs)} 条长期记忆")
+        logger.debug(f"已索引 {len(paragraphs)} 条长期记忆")

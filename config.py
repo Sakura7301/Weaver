@@ -36,6 +36,7 @@ MEMORY_DB = Path(CONFIG["paths"]["memory_db"])
 MEMORY_FILE = Path(CONFIG["paths"]["memory_file"])
 DAILY_MEMORY_DIR = Path(CONFIG["paths"]["daily_memory_dir"])
 LAST_MERGE_FILE = Path(CONFIG["paths"]["last_merge_file"])
+LOG_DIR = Path(CONFIG["paths"]["log_dir"])
 
 # ==================== API配置 ====================
 SEARXNG_URL = CONFIG["api"]["searxng_url"]
@@ -135,8 +136,6 @@ def update_config(key_path: str, value: Any):
     
     # 重新加载配置
     CONFIG = load_config()
-    
-    print(f"配置已更新: {key_path} = {value}")
 
 def get_config(key_path: str = None, default: Any = None) -> Any:
     """

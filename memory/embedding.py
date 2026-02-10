@@ -3,7 +3,7 @@
 """
 
 import hashlib
-from openai import OpenAI
+from log import logger
 
 class EmbeddingManager:
     """嵌入管理器"""
@@ -37,7 +37,7 @@ class EmbeddingManager:
             
             return embedding
         except Exception as e:
-            print(f"❌ 向量化失败: {e}")
+            logger.error(f"向量化失败: {e}")
             return None
     
     @staticmethod
