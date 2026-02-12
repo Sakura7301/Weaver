@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weaver - 智能对话助手</title>
+    <!-- Favicon - 将图标文件放在 static 目录下 -->
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #fff;
+            color: #1a1a1a;
+        }
+        
+        .container-main {
+            display: flex;
+            height: 100vh;
+            background: #f5f5f5;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        
+        .new-chat-btn {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        
+        .new-chat-btn:hover { opacity: 0.9; }
+        
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        
+        .session-item {
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            font-size: 14px;
+            word-break: break-all;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        
+        .session-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .session-item:hover { background-color: #f3f4f6; }
+        
+        .session-item.active {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-color: #667eea;
+            font-weight: 500;
+        }
+        
+        .session-menu-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s;
+            color: #9ca3af;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        .session-item:hover .session-menu-btn { opacity: 1; }
+        
+        .session-menu-btn:hover {
+            background: rgba(0,0,0,0.05);
+            color: #4b5563;
+        }
+        
+        .session-menu-dropdown {
+            position: fixed;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 10000;
+            min-width: 120px;
+            padding: 4px;
+        }
+        
+        .menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #374151;
+            transition: all 0.2s;
+        }
+        
+        .menu-item:hover { background: #f3f4f6; }
+        
+        .menu-item.delete { color: #ef4444; }
+        .menu-item.delete:hover { background: #fef2f2; }
+        
+        .memory-stats {
+            padding: 12px;
+            border-top: 1px solid #e5e5e5;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .memory-stats:hover { background: #f3f4f6; }
+        
+        .memory-badge {
+            background: #f3f4f6;
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: #4b5563;
+            font-size: 11px;
+        }
+        
+        .sidebar-footer {
+            padding: 12px;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .settings-btn {
+            width: 100%;
+            padding: 10px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        .settings-btn:hover { background: #e5e7eb; }
+        
+        .clear-all-btn {
+            width: 100%;
+            padding: 8px;
+            background: transparent;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #6b7280;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .clear-all-btn:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #374151;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+        
+        .chat-header {
+            padding: 16px;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+        }
+        
+        .model-selector {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            max-width: 280px;
+        }
+        
+        .model-selector:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .message-wrapper {
+            display: flex;
+            gap: 12px;
+            animation: slideIn 0.3s ease-in-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-wrapper.user {
+            justify-content: flex-end;
+        }
+        
+        .message-wrapper.user > div {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            max-width: 70%;
+            width: fit-content;
+            margin-left: auto;
+        }
+        
+        .message-user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 100%;
+            width: fit-content;
+            min-width: 60px;
+            word-wrap: break-word;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            line-height: 1.5;
+            white-space: normal;
+        }
+        
+        .user-actions {
+            opacity: 0;
+            transition: opacity 0.2s;
+            display: flex;
+            gap: 4px;
+            align-self: flex-end;
+        }
+        
+        .message-wrapper:hover .user-actions { opacity: 1; }
+        
+        .message-assistant {
+            background: #f7f7f8;
+            color: #1a1a1a;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 70%;
+            width: fit-content;
+            min-width: 60px;
+            word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            line-height: 1.6;
+        }
+        
+        .message-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 4px;
+            padding-left: 4px;
+            width: fit-content;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        
+        .action-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            transition: all 0.2s;
+            padding: 0;
+        }
+        
+        .action-btn.small { width: 24px; height: 24px; }
+        .action-btn.small svg { width: 14px; height: 14px; }
+        
+        .action-btn:hover {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+        
+        .action-btn svg { stroke: currentColor; }
+        
+        .message-duration {
+            font-size: 12px;
+            color: #9ca3af;
+            display: flex;
+            align-items: center;
+        }
+        
+        .loading-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            display: inline-block;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .thinking-box {
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        
+        .thinking-toggle {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #6b7280;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        
+        .thinking-toggle:hover {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .thinking-icon { font-size: 14px; }
+        
+        .thinking-label {
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        
+        .thinking-arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: #9ca3af;
+        }
+        
+        .thinking-content {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #4b5563;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'Courier New', monospace;
+            line-height: 1.5;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .chat-input-area {
+            padding: 16px;
+            border-top: 1px solid #e5e5e5;
+            background: white;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+        
+        .message-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: none;
+            max-height: 100px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        
+        .message-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .send-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 80px;
+        }
+        
+        .send-btn:hover:not(:disabled) { opacity: 0.9; }
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        /* 停止按钮样式 */
+        .stop-btn {
+            padding: 12px 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 80px;
+        }
+        
+        .stop-btn:hover {
+            background: #dc2626;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal-overlay.hidden { display: none; }
+        
+        .modal {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease-in-out;
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e5e5e5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 { margin: 0; font-size: 18px; }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #8e8e93;
+            transition: color 0.2s;
+        }
+        
+        .modal-close:hover { color: #1a1a1a; }
+        
+        .modal-body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .form-group label {
+            font-weight: 500;
+            font-size: 14px;
+            color: #1a1a1a;
+        }
+        
+        .form-group input,
+        .form-group select {
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .api-key-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .api-key-wrapper input { flex: 1; }
+        
+        .api-key-wrapper button {
+            padding: 10px 14px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .api-key-wrapper button:hover { background: #e5e7eb; }
+        
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .btn-cancel, .btn-save {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn-cancel {
+            background: #f3f4f6;
+            color: #1a1a1a;
+        }
+        
+        .btn-cancel:hover { background: #e5e7eb; }
+        
+        .btn-save {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-save:hover { opacity: 0.9; }
+        
+        .btn-confirm {
+            padding: 10px 24px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        
+        .btn-confirm:hover { opacity: 0.9; }
+        
+        .btn-danger {
+            padding: 8px 16px;
+            background: #fee2e2;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+        
+        .btn-danger:hover {
+            background: #ef4444;
+            color: white;
+            border-color: #ef4444;
+        }
+        
+        .confirm-dialog-content { padding: 24px; font-size: 15px; color: #374151; text-align: center; }
+        .confirm-dialog-buttons {
+            padding: 0 24px 24px;
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .hidden { display: none !important; }
+        
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track { background: transparent; }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+        /* 记忆卡片勾选样式 */
+        .memory-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .memory-card.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .memory-nav-btn {
+            transition: all 0.2s;
+        }
+
+        .memory-nav-btn:hover {
+            background: #f3f4f6 !important;
+        }
+
+        .memory-nav-btn.active {
+            background: white !important;
+            border-left-color: #667eea !important;
+            color: #667eea !important;
+        }
+
+        /* 批量操作工具栏 */
+        .batch-actions {
+            display: none;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .batch-actions.visible {
+            display: flex;
+        }
+
+        .batch-actions .selected-count {
+            font-size: 14px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        /* 模型特性图标 */
+        .model-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .model-features {
+            display: flex;
+            gap: 4px;
+            margin-left: auto;
+        }
+
+        .model-feature-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-main">
+        <!-- 左侧边栏 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="new-chat-btn" onclick="createNewChat()">+ 新建对话</button>
+            </div>
+            <div class="sessions-list" id="sessionList"></div>
+            
+            <!-- 记忆统计区域 -->
+            <div class="memory-stats" onclick="openMemoryManager()">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-size: 13px; color: #6b7280; font-weight: 500;">🧠 三级记忆库</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    <span class="memory-badge" id="longTermCount">
+                        📋 长期: 0
+                    </span>
+                    <span class="memory-badge" id="workingCount" style="background: #fef3c7; color: #d97706;">
+                        💡 工作: 0
+                    </span>
+                    <span class="memory-badge" id="shortTermCount">
+                        📝 短期: 0
+                    </span>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <button class="settings-btn" onclick="openSettings()">⚙️ 设置</button>
+                <button class="clear-all-btn" onclick="clearAllSessions()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    清空所有历史
+                </button>
+            </div>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <div class="chat-header">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <select id="modelSelect" class="model-selector" onchange="switchModel()">
+                        <option>加载模型中...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="chat-box" id="chatBox"></div>
+            
+            <!-- 输入区 -->
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="messageInput" 
+                        class="message-input" 
+                        placeholder="输入消息，按 Shift+Enter 换行，Enter 发送..."
+                        onkeydown="handleInputKeydown(event)"
+                        rows="1"
+                    ></textarea>
+                </div>
+                <!-- 发送/停止按钮 -->
+                <button class="send-btn" id="sendBtn" onclick="handleSendStopClick()">
+                    <svg id="sendIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span id="sendBtnText">发送</span>
+                </button>
+                <button class="input-menu-btn" onclick="showInputMenu(event)" title="更多选项">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="19" cy="12" r="1"></circle>
+                        <circle cx="5" cy="12" r="1"></circle>
+                    </svg>
+                </button>
+            </div>
+
+            <style>
+            .input-menu-btn {
+                padding: 12px;
+                background: #f3f4f6;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                cursor: pointer;
+                color: #6b7280;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 44px;
+                width: 44px;
+            }
+
+            .input-menu-btn:hover {
+                background: #e5e7eb;
+                color: #4b5563;
+            }
+
+            .input-dropdown {
+                position: fixed;
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+                z-index: 10000;
+                min-width: 180px;
+                padding: 6px;
+            }
+
+            .input-dropdown .menu-item {
+                padding: 10px 12px;
+                cursor: pointer;
+                border-radius: 6px;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #374151;
+                transition: all 0.2s;
+            }
+
+            .input-dropdown .menu-item:hover {
+                background: #f3f4f6;
+            }
+            </style>
+        </div>
+    </div>
+    
+    <!-- 设置模态框 -->
+    <div class="modal-overlay hidden" id="settingsModal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>API 设置</h2>
+                <button class="modal-close" onclick="closeSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>OpenAI API Key <span style="color: #ef4444;">*</span></label>
+                    <div class="api-key-wrapper">
+                        <input type="password" id="config_OPENAI_API_KEY" placeholder="sk-..." style="flex: 1;">
+                        <button type="button" onclick="toggleApiKeyVisibility()" style="white-space: nowrap;">👁️ 显示</button>
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">您的 API Key 仅存储在本地</div>
+                </div>
+
+                <div class="form-group">
+                    <label>API Base URL</label>
+                    <input type="text" id="config_OPENAI_BASE_URL" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1">
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">如果使用第三方 API 服务请修改此项</div>
+                </div>
+
+                <div class="form-group">
+                    <label>自动保存记忆间隔</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="config_memory_interval_value" value="30" min="1" style="flex: 1;">
+                        <select id="config_memory_interval_unit">
+                            <option value="seconds">秒</option>
+                            <option value="minutes" selected>分钟</option>
+                            <option value="hours">小时</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>记忆处理专用模型</label>
+                    <input type="text" id="config_MEMORY_MODEL" placeholder="例如: glm-4-plus, gpt-4o">
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">用于记忆提取和合并的AI模型</div>
+                </div>
+
+                <div class="form-group">
+                    <label>工作记忆容量</label>
+                    <input type="number" id="config_WORKING_MEMORY_CAPACITY" value="10" min="5" max="50">
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">工作记忆最大保存条数（5-50）</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeSettings()">取消</button>
+                <button class="btn-save" onclick="saveSettings()">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示词设置模态框 -->
+    <div class="modal-overlay hidden" id="promptModal">
+        <div class="modal" style="max-width: 700px; max-height: 85vh;">
+            <div class="modal-header">
+                <h2>提示词设置</h2>
+                <button class="modal-close" onclick="closePromptSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #6b7280;">
+                    <strong>说明：</strong>修改系统提示词（System Prompt）会改变 AI 的行为方式。
+                </div>
+                
+                <div class="form-group" style="flex: 1;">
+                    <label>系统提示词 (System Prompt)</label>
+                    <textarea 
+                        id="systemPromptInput" 
+                        style="width: 100%; min-height: 300px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.6;"
+                        placeholder="输入系统提示词..."
+                    ></textarea>
+                </div>
+                
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button class="btn-cancel" onclick="resetPromptToDefault()" style="margin-right: auto;">恢复默认</button>
+                    <button class="btn-cancel" onclick="closePromptSettings()">取消</button>
+                    <button class="btn-save" onclick="savePromptSettings()">保存并应用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 记忆管理模态框 -->
+    <div class="modal-overlay hidden" id="memoryModal">
+        <div class="modal" style="max-width: 800px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header" style="border-bottom: 2px solid #f3f4f6;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h2 style="margin: 0; font-size: 20px; font-weight: 600;">三级记忆管理</h2>
+                    <span id="memoryStatsBadge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">
+                        长期:0 | 工作:0 | 短期:0
+                    </span>
+                </div>
+                <button class="modal-close" onclick="closeMemoryManager()">×</button>
+            </div>
+            
+            <div style="display: flex; flex: 1; overflow: hidden;">
+                <!-- 左侧标签栏 -->
+                <div style="width: 140px; border-right: 1px solid #e5e7eb; background: #f9fafb; padding: 16px 0;">
+                    <button class="memory-nav-btn active" onclick="switchMemoryTab('long')" id="nav-long" 
+                            style="width: 100%; padding: 12px 16px; border: none; background: transparent; 
+                                cursor: pointer; text-align: left; font-size: 14px; border-left: 3px solid transparent;
+                                display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">🧠</span>
+                        <div>
+                            <div style="font-weight: 500;">长期记忆</div>
+                            <div style="font-size: 11px; color: #9ca3af;">永久保存</div>
+                        </div>
+                    </button>
+                    <button class="memory-nav-btn" onclick="switchMemoryTab('working')" id="nav-working"
+                            style="width: 100%; padding: 12px 16px; border: none; background: transparent; 
+                                cursor: pointer; text-align: left; font-size: 14px; border-left: 3px solid transparent;
+                                display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">💡</span>
+                        <div>
+                            <div style="font-weight: 500;">工作记忆</div>
+                            <div style="font-size: 11px; color: #9ca3af;">当前上下文</div>
+                        </div>
+                    </button>
+                    <button class="memory-nav-btn" onclick="switchMemoryTab('short')" id="nav-short"
+                            style="width: 100%; padding: 12px 16px; border: none; background: transparent; 
+                                cursor: pointer; text-align: left; font-size: 14px; border-left: 3px solid transparent;
+                                display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">📝</span>
+                        <div>
+                            <div style="font-weight: 500;">短期记忆</div>
+                            <div style="font-size: 11px; color: #9ca3af;">对话历史</div>
+                        </div>
+                    </button>
+                </div>
+                
+                <!-- 右侧内容区 -->
+                <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <!-- 批量操作工具栏 -->
+                    <div class="batch-actions" id="batchActions">
+                        <input type="checkbox" id="selectAllMemories" onchange="toggleSelectAllMemories()" style="accent-color: #667eea; width: 18px; height: 18px;">
+                        <span class="selected-count" id="selectedCount">已选择 0 条</span>
+                        <button class="btn-danger" onclick="deleteSelectedMemories()" style="margin-left: auto;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 4px;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            删除选中
+                        </button>
+                        <button class="btn-cancel" onclick="clearSelection()" style="padding: 6px 12px; font-size: 13px;">取消选择</button>
+                    </div>
+
+                    <!-- 长期记忆添加区 -->
+                    <div id="addMemoryContainer" style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: #fafafa;">
+                        <div style="font-size: 13px; color: #667eea; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            添加长期记忆
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="manualMemoryInput" placeholder="输入重要信息（如：用户是程序员，喜欢Python）..." 
+                                style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none;"
+                                onkeydown="if(event.key==='Enter') addMemoryManually()">
+                            <button onclick="addMemoryManually()" 
+                                    style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                        color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; 
+                                        font-weight: 500;">
+                                保存
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 记忆列表 -->
+                    <div id="memoryList" style="flex: 1; overflow-y: auto; padding: 16px; background: white;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="border-top: 2px solid #f3f4f6; background: #fafafa; justify-content: space-between;">
+                <button class="btn-danger" onclick="confirmClearAllMemory()" id="clearAllMemoryBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 4px;">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    清空当前类型
+                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-cancel" onclick="closeMemoryManager()" style="background: white; border: 1px solid #d1d5db;">关闭</button>
+                    <button class="btn-save" onclick="refreshMemories()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 4px;">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        刷新
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
