@@ -27,17 +27,28 @@
 ## 文件结构
 
 ```
-weaver/
-├── app.py              # Flask 主应用
-├── app.js              # 前端 JavaScript
-├── index.html          # 前端 HTML
-├── agent_manager.py    # Agent 管理器
-├── chat_history.py     # 对话历史管理
-├── log.py              # 日志模块
-├── memory_system.py    # 记忆系统
-├── tools.py            # 工具函数
-├── .env                # 环境配置 (需自行创建)
-└── README.md           # 使用说明
+Weaver/
+├── LICENSE
+├── README.md
+├── agent_manager.py
+├── app.py                 # 主程序
+├── chat_history.py
+├── .env                   # 环境配置 (需自行创建)
+├── history                # 对话历史目录
+├── log.py
+├── memory_data            # 记忆数据目录
+│   ├── long_term.db
+│   └── session_log.md
+├── memory_system.py
+├── requirements.txt
+├── run.sh
+├── static
+│   ├── app.js
+│   ├── favicon.png
+│   └── favicon.svg
+├── templates
+│   └── index.html
+└── tools.py
 ```
 
 ## 安装和使用
