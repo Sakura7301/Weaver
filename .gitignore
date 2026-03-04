@@ -4,3 +4,4 @@ __pycache__/
 logs/
 history/
 memory_data/
+*.pid

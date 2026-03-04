@@ -10,6 +10,7 @@ let loadingIndicator = null;
 let currentMemoryTab = 'long';
 let selectedMemoryIds = new Set();
 let modelsData = []; // 存储模型数据（包含特性信息）
+let validatedModels = []; // 校验成功后获取的模型列表，用于记忆管理模型选择
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
@@ -108,12 +109,16 @@ async function loadSession(sessionId) {
         
         const data = await res.json();
         
+        // 跟踪用户消息索引
+        let userMsgIndex = -1;
+        
         chatBox.innerHTML = data.messages.map((m, index) => {
             const msgId = `msg-${sessionId}-${index}`;
             
             if (m.role === 'user') {
+                userMsgIndex = index; // 更新用户消息索引
                 return `
-                    <div class="flex justify-end message-wrapper" data-msg-id="${msgId}">
+                    <div class="flex justify-end message-wrapper" data-msg-id="${msgId}" data-msg-index="${index}">
                         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 70%; width: fit-content; margin-left: auto;">
                             <div class="message-user">${escapeHtml(m.content)}</div>
                             <div class="user-actions">
@@ -128,6 +133,8 @@ async function loadSession(sessionId) {
                     </div>
                 `;
             } else {
+                // AI消息记录对应的用户消息索引
+                const correspondingUserIndex = userMsgIndex;
                 let content = m.content;
                 let thinking = "";
                 
@@ -142,14 +149,14 @@ async function loadSession(sessionId) {
                 const thinkingHtml = thinking ? createThinkingHTML(thinking, msgId) : '';
                 
                 return `
-                    <div class="flex flex-col items-start gap-2 message-wrapper" data-msg-id="${msgId}">
+                    <div class="flex flex-col items-start gap-2 message-wrapper" data-msg-id="${msgId}" data-msg-index="${index}" data-user-msg-index="${correspondingUserIndex}">
                         <div class="flex items-start gap-2 w-full">
                             <div class="flex-1">
                                 ${thinkingHtml}
                                 <div class="message-assistant" data-raw-text="${escapeHtml(content)}">${renderMarkdown(content)}</div>
                             </div>
                         </div>
-                        ${createMessageActions(m.duration, content)}
+                        ${createMessageActions(m.duration, content, correspondingUserIndex)}
                     </div>
                 `;
             }
@@ -447,7 +454,8 @@ function toggleThinking(uniqueId) {
     }
 }
 
-function createMessageActions(duration, content) {
+// 修改：添加 userMsgIndex 参数，用于定位要重新生成的消息
+function createMessageActions(duration, content, userMsgIndex = -1) {
     const durationText = duration ? `耗时 ${duration}s` : '';
     
     return `
@@ -459,7 +467,7 @@ function createMessageActions(duration, content) {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                 </button>
-                <button class="action-btn" onclick="regenerate()" title="重新生成">
+                <button class="action-btn" onclick="regenerate(${userMsgIndex})" title="重新生成">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"></polyline>
                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -497,13 +505,14 @@ function copyMessage(btn) {
 
 // ============ 消息发送和接收 ============
 
-function createAIMessageWrapper() {
+function createAIMessageWrapper(userMsgIndex = -1) {
     messageCounter++;
     const uniqueId = `new-${Date.now()}-${messageCounter}`;
     
     const wrapper = document.createElement('div');
     wrapper.className = 'flex flex-col items-start gap-2 message-wrapper';
     wrapper.dataset.thinkingId = uniqueId;
+    wrapper.dataset.userMsgIndex = userMsgIndex;
     wrapper.innerHTML = `
         <div class="flex items-start gap-2 w-full">
             <div class="flex-1">
@@ -526,7 +535,7 @@ function createAIMessageWrapper() {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                     </svg>
                 </button>
-                <button class="action-btn" onclick="regenerate()" title="重新生成">
+                <button class="action-btn" onclick="regenerate(${userMsgIndex})" title="重新生成">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"></polyline>
                         <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -555,8 +564,13 @@ function sendMessage() {
     
     const chatBox = document.getElementById('chatBox');
     
+    // 获取当前用户消息索引（在发送前计算）
+    const existingMessages = chatBox.querySelectorAll('.message-wrapper');
+    const userMsgIndex = existingMessages.length; // 新消息的索引
+    
     const userWrapper = document.createElement('div');
     userWrapper.className = 'flex justify-end message-wrapper';
+    userWrapper.dataset.msgIndex = userMsgIndex;
     userWrapper.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 70%; width: fit-content; margin-left: auto;">
             <div class="message-user">${escapeHtml(message)}</div>
@@ -572,7 +586,7 @@ function sendMessage() {
     `;
     chatBox.appendChild(userWrapper);
     
-    const aiMessageWrapper = createAIMessageWrapper();
+    const aiMessageWrapper = createAIMessageWrapper(userMsgIndex);
     chatBox.appendChild(aiMessageWrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
     
@@ -593,15 +607,30 @@ function sendMessage() {
     });
 }
 
-function regenerate() {
+// 修改：regenerate 接收 userMsgIndex 参数，指定要重新生成的是哪条回复
+function regenerate(userMsgIndex = -1) {
     if (isStreaming) return;
     
     const chatBox = document.getElementById('chatBox');
     const messages = chatBox.querySelectorAll('.message-wrapper');
     
-    if (messages.length > 0) messages[messages.length - 1].remove();
+    // 如果指定了用户消息索引，找到对应的AI回复并删除
+    if (userMsgIndex >= 0) {
+        // 找到该用户消息之后的AI回复
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            const msgUserIndex = parseInt(msg.dataset.userMsgIndex || -1);
+            if (msgUserIndex === userMsgIndex) {
+                msg.remove();
+                break;
+            }
+        }
+    } else {
+        // 兼容旧逻辑：删除最后一条消息
+        if (messages.length > 0) messages[messages.length - 1].remove();
+    }
     
-    const aiMessageWrapper = createAIMessageWrapper();
+    const aiMessageWrapper = createAIMessageWrapper(userMsgIndex);
     chatBox.appendChild(aiMessageWrapper);
     chatBox.scrollTop = chatBox.scrollHeight;
     
@@ -615,7 +644,11 @@ function regenerate() {
     isStreaming = true;
     updateSendButton(true);
     
-    socket.emit('regenerate', { session_id: currentSession });
+    // 发送重新生成请求，包含用户消息索引
+    socket.emit('regenerate', { 
+        session_id: currentSession,
+        user_msg_index: userMsgIndex
+    });
 }
 
 // ============ Socket 事件处理 ============
@@ -1021,76 +1054,148 @@ async function deleteMemory(id) {
     }
 }
 
-function refreshMemories() {
-    selectedMemoryIds.clear();
-    loadMemories();
-    updateMemoryStats();
-}
-
-// ============ Toast ============
-
-function showToast(message, type = 'success') {
-    const existing = document.querySelector('.toast-notification');
-    if (existing) existing.remove();
-    
-    const colors = { success: { bg: '#10b981', icon: '✓' }, error: { bg: '#ef4444', icon: '✗' }, warning: { bg: '#f59e0b', icon: '!' } };
-    const style = colors[type] || colors.success;
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.style.cssText = `
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: ${style.bg}; color: white; padding: 16px 24px; border-radius: 12px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2); z-index: 9999; font-size: 14px; font-weight: 500;
-        display: flex; align-items: center; gap: 10px; min-width: 200px; justify-content: center;
-    `;
-    toast.innerHTML = `<span style="font-size: 18px; font-weight: bold;">${style.icon}</span><span>${message}</span>`;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s';
-        setTimeout(() => toast.remove(), 300);
-    }, 2500);
-}
-
 // ============ 设置 ============
 
-function switchModel() {
-    const modelId = document.getElementById('modelSelect').value;
-    socket.emit('switch_model', { model_id: modelId });
-}
-
 async function openSettings() {
-    document.getElementById('settingsModal').classList.remove('hidden');
     try {
         const res = await fetch('/api/config');
         const config = await res.json();
+        
         document.getElementById('config_OPENAI_API_KEY').value = config.OPENAI_API_KEY || '';
-        document.getElementById('config_OPENAI_BASE_URL').value = config.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+        document.getElementById('config_OPENAI_BASE_URL').value = config.OPENAI_BASE_URL || '';
         document.getElementById('config_memory_interval_value').value = config.MEMORY_INTERVAL_VALUE || '30';
         document.getElementById('config_memory_interval_unit').value = config.MEMORY_INTERVAL_UNIT || 'minutes';
-        document.getElementById('config_MEMORY_MODEL').value = config.MEMORY_MODEL || '';
         document.getElementById('config_WORKING_MEMORY_CAPACITY').value = config.WORKING_MEMORY_CAPACITY || '10';
+        
+        // 初始化记忆管理模型下拉框
+        const memoryModelSelect = document.getElementById('config_MEMORY_MODEL');
+        const currentMemoryModel = config.MEMORY_MODEL || '';
+        
+        // 如果已有校验过的模型列表，使用它；否则从主模型列表获取
+        if (validatedModels.length > 0) {
+            updateMemoryModelSelect(validatedModels, currentMemoryModel);
+        } else {
+            // 使用当前的模型列表
+            updateMemoryModelSelect(modelsData.map(m => ({ id: m.id, name: m.name || m.id })), currentMemoryModel);
+        }
+        
+        document.getElementById('settingsModal').classList.remove('hidden');
     } catch (e) {
         console.error('加载配置失败:', e);
+        showToast('加载配置失败', 'error');
     }
+}
+
+// 更新记忆管理模型下拉框
+function updateMemoryModelSelect(models, selectedModel) {
+    const select = document.getElementById('config_MEMORY_MODEL');
+    select.innerHTML = '<option value="">-- 使用对话模型 --</option>';
+    
+    models.forEach(m => {
+        const option = document.createElement('option');
+        option.value = m.id;
+        option.textContent = m.name || m.id;
+        if (m.id === selectedModel) option.selected = true;
+        select.appendChild(option);
+    });
 }
 
 function closeSettings() {
     document.getElementById('settingsModal').classList.add('hidden');
 }
 
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('config_OPENAI_API_KEY');
+    const btn = event.target;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈 隐藏';
+    } else {
+        input.type = 'password';
+        btn.textContent = '👁️ 显示';
+    }
+}
+
+// ============ API Key 校验 ============
+
+async function validateApiKey() {
+    const apiKey = document.getElementById('config_OPENAI_API_KEY').value.trim();
+    const baseUrl = document.getElementById('config_OPENAI_BASE_URL').value.trim() || 'https://api.openai.com/v1';
+    
+    if (!apiKey) {
+        showToast('请先输入 API Key', 'warning');
+        return;
+    }
+    
+    const btn = document.getElementById('validateApiBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px;"></span> 校验中...';
+    
+    try {
+        const res = await fetch('/api/validate-api', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey, base_url: baseUrl })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('校验成功！获取到 ' + data.models.length + ' 个模型', 'success');
+            
+            // 保存校验成功后的模型列表
+            validatedModels = data.models;
+            
+            // 更新记忆管理模型下拉框
+            const currentMemoryModel = document.getElementById('config_MEMORY_MODEL').value;
+            updateMemoryModelSelect(validatedModels, currentMemoryModel);
+            
+            btn.innerHTML = '✅ 校验成功';
+            btn.style.background = '#10b981';
+            btn.style.color = 'white';
+            btn.style.borderColor = '#10b981';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+                btn.disabled = false;
+            }, 2000);
+        } else {
+            showToast('校验失败: ' + (data.error || '未知错误'), 'error');
+            btn.innerHTML = '❌ 校验失败';
+            btn.style.background = '#ef4444';
+            btn.style.color = 'white';
+            btn.style.borderColor = '#ef4444';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+                btn.disabled = false;
+            }, 2000);
+        }
+    } catch (e) {
+        console.error('校验失败:', e);
+        showToast('校验请求失败', 'error');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
 async function saveSettings() {
     const config = {
-        OPENAI_API_KEY: document.getElementById('config_OPENAI_API_KEY')?.value?.trim() || '',
-        OPENAI_BASE_URL: document.getElementById('config_OPENAI_BASE_URL')?.value?.trim() || 'https://api.openai.com/v1',
-        MEMORY_INTERVAL_VALUE: document.getElementById('config_memory_interval_value')?.value || '30',
-        MEMORY_INTERVAL_UNIT: document.getElementById('config_memory_interval_unit')?.value || 'minutes',
-        MEMORY_MODEL: document.getElementById('config_MEMORY_MODEL')?.value?.trim() || '',
-        WORKING_MEMORY_CAPACITY: document.getElementById('config_WORKING_MEMORY_CAPACITY')?.value || '10'
+        OPENAI_API_KEY: document.getElementById('config_OPENAI_API_KEY').value,
+        OPENAI_BASE_URL: document.getElementById('config_OPENAI_BASE_URL').value,
+        MEMORY_INTERVAL_VALUE: document.getElementById('config_memory_interval_value').value,
+        MEMORY_INTERVAL_UNIT: document.getElementById('config_memory_interval_unit').value,
+        MEMORY_MODEL: document.getElementById('config_MEMORY_MODEL').value,
+        WORKING_MEMORY_CAPACITY: document.getElementById('config_WORKING_MEMORY_CAPACITY').value
     };
-    
-    if (!config.OPENAI_API_KEY) { showToast('请输入 OPENAI_API_KEY', 'error'); return; }
     
     try {
         const res = await fetch('/api/config', {
@@ -1099,246 +1204,35 @@ async function saveSettings() {
             body: JSON.stringify(config)
         });
         
-        const result = await res.json();
-        if (result.success) {
+        const data = await res.json();
+        if (data.success) {
+            showToast('设置已保存', 'success');
             closeSettings();
-            showToast('设置已保存并生效', 'success');
-            loadModels();
-        } else showToast('保存失败: ' + (result.error || '未知错误'), 'error');
+            loadModels(); // 重新加载模型列表
+        } else {
+            showToast('保存失败: ' + (data.error || '未知错误'), 'error');
+        }
     } catch (e) {
         console.error('保存设置失败:', e);
         showToast('保存失败', 'error');
     }
 }
 
-function toggleApiKeyVisibility() {
-    const input = document.getElementById('config_OPENAI_API_KEY');
-    const btn = event.target.closest('button');
-    if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈 隐藏'; }
-    else { input.type = 'password'; btn.textContent = '👁️ 显示'; }
-}
-
-// ============ 工具函数 ============
-
-function showConfirmDialog(message, onConfirm) {
-    const existing = document.querySelector('.confirm-dialog-overlay');
-    if (existing) existing.remove();
+async function switchModel() {
+    const modelId = document.getElementById('modelSelect').value;
+    if (!modelId) return;
     
-    const dialog = document.createElement('div');
-    dialog.className = 'modal-overlay confirm-dialog-overlay';
-    dialog.style.display = 'flex';
-    dialog.style.zIndex = '9999';
-    dialog.innerHTML = `
-        <div class="modal" style="max-width: 400px; margin: auto;">
-            <div class="confirm-dialog-content">${escapeHtml(message)}</div>
-            <div class="confirm-dialog-buttons">
-                <button class="btn-cancel" id="confirmCancelBtn">取消</button>
-                <button class="btn-confirm" id="confirmOkBtn">确定</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(dialog);
-    dialog.querySelector('#confirmCancelBtn').onclick = () => dialog.remove();
-    dialog.querySelector('#confirmOkBtn').onclick = () => { dialog.remove(); onConfirm(); };
-    dialog.onclick = (e) => { if (e.target === dialog) dialog.remove(); };
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function renderMarkdown(text) {
-    try {
-        // 配置 marked 选项
-        if (typeof marked !== 'undefined') {
-            marked.setOptions({
-                breaks: true,        // 支持 GitHub 风格换行
-                gfm: true,          // 启用 GitHub 风格 Markdown
-                headerIds: false,   // 禁用自动生成的 header ID
-                mangle: false       // 禁用邮箱混淆
-            });
-        }
-        
-        let html = DOMPurify.sanitize(marked.parse(text), {
-            ADD_ATTR: ['target'],  // 允许 target 属性
-            ADD_TAGS: ['iframe']   // 允许 iframe（可选）
-        });
-        
-        // 为代码块添加复制按钮和语言标签
-        html = addCodeBlockFeatures(html);
-        
-        return html;
-    } catch (e) {
-        console.error('Markdown 渲染错误:', e);
-        return escapeHtml(text);
-    }
-}
-
-function addCodeBlockFeatures(html) {
-    // 创建临时容器解析 HTML
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-    
-    // 找到所有 pre > code 代码块
-    const codeBlocks = temp.querySelectorAll('pre > code');
-    
-    codeBlocks.forEach((codeBlock, index) => {
-        const pre = codeBlock.parentElement;
-        
-        // 获取语言类名 (如 language-python)
-        let lang = '';
-        const classes = codeBlock.className.split(' ');
-        for (const cls of classes) {
-            if (cls.startsWith('language-')) {
-                lang = cls.replace('language-', '');
-                break;
-            }
-        }
-        
-        // 创建包装容器
-        const wrapper = document.createElement('div');
-        wrapper.className = 'code-block-wrapper';
-        wrapper.style.cssText = 'position: relative; margin: 12px 0; border-radius: 8px; overflow: hidden; background: #1e1e1e;';
-        
-        // 创建头部栏
-        const header = document.createElement('div');
-        header.className = 'code-block-header';
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #2d2d2d; border-bottom: 1px solid #404040;';
-        
-        // 语言标签
-        const langLabel = document.createElement('span');
-        langLabel.className = 'code-lang-label';
-        langLabel.style.cssText = 'font-size: 12px; color: #888; font-family: monospace;';
-        langLabel.textContent = lang || 'code';
-        
-        // 复制按钮
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'code-copy-btn';
-        copyBtn.style.cssText = 'padding: 4px 12px; background: #404040; border: none; border-radius: 4px; color: #ccc; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;';
-        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 复制`;
-        copyBtn.onclick = function() {
-            const code = codeBlock.textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> 已复制`;
-                copyBtn.style.color = '#10b981';
-                setTimeout(() => {
-                    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 复制`;
-                    copyBtn.style.color = '#ccc';
-                }, 2000);
-            });
-        };
-        
-        header.appendChild(langLabel);
-        header.appendChild(copyBtn);
-        
-        // 设置 pre 的样式
-        pre.style.cssText = 'margin: 0; padding: 12px; overflow-x: auto; background: #1e1e1e;';
-        codeBlock.style.cssText = 'font-family: "Fira Code", "Consolas", "Monaco", monospace; font-size: 13px; line-height: 1.5; color: #d4d4d4;';
-        
-        // 组装
-        wrapper.appendChild(header);
-        wrapper.appendChild(pre);
-        
-        // 替换原来的 pre
-        pre.parentNode.replaceChild(wrapper, pre);
-    });
-    
-    return temp.innerHTML;
-}
-
-function handleInputKeydown(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-    }
-}
-
-// ============ 输入框菜单 ============
-
-function showInputMenu(event) {
-    event.stopPropagation();
-    
-    const existing = document.querySelector('.input-dropdown');
-    if (existing) { existing.remove(); return; }
-    
-    const btn = event.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    
-    const menu = document.createElement('div');
-    menu.className = 'input-dropdown';
-    menu.innerHTML = `
-        <div class="menu-item" onclick="openPromptSettings(); closeInputMenu();">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
-            <span>提示词设置</span>
-        </div>
-        <div class="menu-item" onclick="clearContext(); closeInputMenu();">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-            <span>清空上下文</span>
-        </div>
-        <div class="menu-item" onclick="openMemoryManager(); closeInputMenu();">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-            <span>记忆管理</span>
-        </div>
-    `;
-    
-    menu.style.position = 'fixed';
-    menu.style.visibility = 'hidden';
-    menu.style.zIndex = '10000';
-    document.body.appendChild(menu);
-    
-    const menuRect = menu.getBoundingClientRect();
-    let leftPos = rect.left + (rect.width / 2) - (menuRect.width / 2);
-    if (leftPos < 10) leftPos = 10;
-    if (leftPos + menuRect.width > window.innerWidth - 10) leftPos = window.innerWidth - menuRect.width - 10;
-    
-    const spaceAbove = rect.top;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    let topPos = spaceAbove >= menuRect.height + 8 ? rect.top - menuRect.height - 8 : rect.bottom + 8;
-    
-    menu.style.left = leftPos + 'px';
-    menu.style.top = topPos + 'px';
-    menu.style.visibility = 'visible';
-    
-    setTimeout(() => document.addEventListener('click', closeInputMenu), 0);
-}
-
-function closeInputMenu() {
-    const menu = document.querySelector('.input-dropdown');
-    if (menu) menu.remove();
-    document.removeEventListener('click', closeInputMenu);
-}
-
-function clearContext() {
-    if (!currentSession) { showToast('当前没有对话', 'warning'); return; }
-    showConfirmDialog('确定要清空当前对话的上下文吗？这将创建一个新的对话。', () => {
-        createNewChat();
-        showToast('已创建新对话', 'success');
-    });
+    socket.emit('switch_model', { model_id: modelId });
 }
 
 // ============ 提示词设置 ============
 
-let defaultPrompt = '';
-
 async function openPromptSettings() {
-    document.getElementById('promptModal').classList.remove('hidden');
     try {
         const res = await fetch('/api/prompt');
         const data = await res.json();
-        document.getElementById('systemPromptInput').value = data.prompt || '';
-        defaultPrompt = data.default_prompt || '';
+        document.getElementById('systemPromptInput').value = data.prompt || data.default_prompt;
+        document.getElementById('promptModal').classList.remove('hidden');
     } catch (e) {
         console.error('加载提示词失败:', e);
         showToast('加载提示词失败', 'error');
@@ -1350,26 +1244,216 @@ function closePromptSettings() {
 }
 
 async function savePromptSettings() {
-    const prompt = document.getElementById('systemPromptInput').value.trim();
+    const prompt = document.getElementById('systemPromptInput').value;
+    
     try {
         const res = await fetch('/api/prompt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: prompt })
         });
+        
         const data = await res.json();
         if (data.success) {
-            closePromptSettings();
             showToast('提示词已保存', 'success');
-        } else showToast('保存失败', 'error');
+            closePromptSettings();
+        } else {
+            showToast('保存失败', 'error');
+        }
     } catch (e) {
+        console.error('保存提示词失败:', e);
         showToast('保存失败', 'error');
     }
 }
 
-function resetPromptToDefault() {
-    if (defaultPrompt) {
-        document.getElementById('systemPromptInput').value = defaultPrompt;
+async function resetPromptToDefault() {
+    try {
+        const res = await fetch('/api/prompt');
+        const data = await res.json();
+        document.getElementById('systemPromptInput').value = data.default_prompt;
         showToast('已恢复默认提示词', 'success');
+    } catch (e) {
+        console.error('恢复默认提示词失败:', e);
     }
 }
+
+// ============ 工具函数 ============
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderMarkdown(text) {
+    if (!text) return '';
+    try {
+        const html = marked.parse(text);
+        return DOMPurify.sanitize(html);
+    } catch (e) {
+        return escapeHtml(text);
+    }
+}
+
+function showConfirmDialog(message, onConfirm) {
+    const overlay = document.getElementById('confirmDialogOverlay');
+    const content = document.getElementById('confirmDialogContent');
+    const confirmBtn = document.getElementById('confirmDialogBtn');
+    
+    content.textContent = message;
+    overlay.classList.remove('hidden');
+    
+    const handleConfirm = () => {
+        overlay.classList.add('hidden');
+        confirmBtn.removeEventListener('click', handleConfirm);
+        onConfirm();
+    };
+    
+    confirmBtn.addEventListener('click', handleConfirm);
+}
+
+function closeConfirmDialog() {
+    document.getElementById('confirmDialogOverlay').classList.add('hidden');
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    
+    const bgColors = {
+        success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        error: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+        warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        info: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    };
+    
+    toast.style.cssText = `
+        background: ${bgColors[type] || bgColors.info};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideInRight 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const icons = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    toast.innerHTML = `<span style="font-weight: bold;">${icons[type] || icons.info}</span> ${escapeHtml(message)}`;
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// 输入处理
+function handleInputKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// 自动调整输入框高度
+document.addEventListener('DOMContentLoaded', () => {
+    const textarea = document.getElementById('messageInput');
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+    }
+});
+
+// 输入菜单
+function showInputMenu(event) {
+    event.stopPropagation();
+    
+    const existingMenu = document.querySelector('.input-dropdown');
+    if (existingMenu) existingMenu.remove();
+    
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    
+    const menu = document.createElement('div');
+    menu.className = 'input-dropdown';
+    menu.innerHTML = `
+        <div class="menu-item" onclick="openPromptSettings()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>设置系统提示词</span>
+        </div>
+        <div class="menu-item" onclick="openMemoryManager()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            <span>管理记忆库</span>
+        </div>
+    `;
+    
+    menu.style.position = 'fixed';
+    menu.style.visibility = 'hidden';
+    menu.style.zIndex = '10000';
+    
+    document.body.appendChild(menu);
+    
+    const menuRect = menu.getBoundingClientRect();
+    const menuWidth = menuRect.width;
+    const menuHeight = menuRect.height;
+    
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    let leftPos = rect.left - menuWidth + rect.width;
+    if (leftPos < 8) leftPos = 8;
+    if (leftPos + menuWidth > windowWidth - 8) leftPos = windowWidth - menuWidth - 8;
+    
+    let topPos = rect.top - menuHeight - 4;
+    if (topPos < 8) topPos = rect.bottom + 4;
+    
+    menu.style.left = leftPos + 'px';
+    menu.style.top = topPos + 'px';
+    menu.style.visibility = 'visible';
+    
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== btn) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 0);
+}
+
+// 添加CSS动画
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideOutRight {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(20px); }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+`;
+document.head.appendChild(style);

@@ -25,7 +25,7 @@
         .container-main {
             display: flex;
             height: 100vh;
-            background: #f5f5f5;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
         }
         
         .sidebar {
@@ -35,38 +35,54 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
         }
         
         .sidebar-header {
-            padding: 16px;
+            padding: 20px;
             border-bottom: 1px solid #e5e5e5;
+            background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%);
+        }
+        
+        .app-title {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+            text-align: center;
         }
         
         .new-chat-btn {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
-            font-weight: 500;
-            transition: opacity 0.2s;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
-        .new-chat-btn:hover { opacity: 0.9; }
+        .new-chat-btn:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
         
         .sessions-list {
             flex: 1;
             overflow-y: auto;
-            padding: 8px;
+            padding: 12px;
         }
         
         .session-item {
-            padding: 12px;
+            padding: 14px;
             cursor: pointer;
-            border-radius: 8px;
-            margin-bottom: 4px;
+            border-radius: 10px;
+            margin-bottom: 6px;
             transition: all 0.2s;
             border: 1px solid transparent;
             font-size: 14px;
@@ -75,6 +91,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 8px;
+            background: #fafafa;
         }
         
         .session-content {
@@ -82,18 +99,22 @@
             min-width: 0;
         }
         
-        .session-item:hover { background-color: #f3f4f6; }
+        .session-item:hover { 
+            background-color: #f0f2f5;
+            transform: translateX(4px);
+        }
         
         .session-item.active {
             background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
             border-color: #667eea;
             font-weight: 500;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
         }
         
         .session-menu-btn {
             width: 24px;
             height: 24px;
-            border-radius: 4px;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -107,7 +128,7 @@
         .session-item:hover .session-menu-btn { opacity: 1; }
         
         .session-menu-btn:hover {
-            background: rgba(0,0,0,0.05);
+            background: rgba(0,0,0,0.08);
             color: #4b5563;
         }
         
@@ -115,17 +136,17 @@
             position: fixed;
             background: white;
             border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.15);
             z-index: 10000;
             min-width: 120px;
-            padding: 4px;
+            padding: 6px;
         }
         
         .menu-item {
-            padding: 8px 12px;
+            padding: 10px 14px;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 13px;
             display: flex;
             align-items: center;
@@ -140,52 +161,64 @@
         .menu-item.delete:hover { background: #fef2f2; }
         
         .memory-stats {
-            padding: 12px;
+            padding: 16px;
             border-top: 1px solid #e5e5e5;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
         }
         
-        .memory-stats:hover { background: #f3f4f6; }
+        .memory-stats:hover { 
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            transform: scale(1.02);
+        }
         
         .memory-badge {
-            background: #f3f4f6;
-            padding: 2px 8px;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            padding: 4px 10px;
             border-radius: 12px;
             color: #4b5563;
             font-size: 11px;
+            font-weight: 500;
         }
         
         .sidebar-footer {
-            padding: 12px;
+            padding: 16px;
             border-top: 1px solid #e5e5e5;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
         
         .settings-btn {
             width: 100%;
-            padding: 10px;
-            background: #f3f4f6;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
+            padding: 12px;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: 500;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         
-        .settings-btn:hover { background: #e5e7eb; }
+        .settings-btn:hover { 
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border-color: #d1d5db;
+        }
         
         .clear-all-btn {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
             background: transparent;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 13px;
-            color: #6b7280;
+            color: #ef4444;
             transition: all 0.2s;
             display: flex;
             align-items: center;
@@ -194,9 +227,8 @@
         }
         
         .clear-all-btn:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
-            color: #374151;
+            background: #fef2f2;
+            border-color: #fca5a5;
         }
         
         .main-content {
@@ -204,10 +236,13 @@
             display: flex;
             flex-direction: column;
             background: white;
+            border-radius: 20px 0 0 20px;
+            overflow: hidden;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.05);
         }
         
         .chat-header {
-            padding: 16px;
+            padding: 16px 24px;
             border-bottom: 1px solid #e5e5e5;
             display: flex;
             justify-content: space-between;
@@ -215,29 +250,37 @@
             background: white;
         }
         
+        .chat-header-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
         .model-selector {
-            padding: 8px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
+            padding: 10px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
             background: white;
             cursor: pointer;
             font-size: 14px;
-            max-width: 280px;
+            max-width: 320px;
+            transition: all 0.2s;
         }
         
         .model-selector:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
         
         .chat-box {
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
+            background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
         }
         
         .message-wrapper {
@@ -268,14 +311,14 @@
         .message-user {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 12px 16px;
-            border-radius: 18px;
+            padding: 14px 18px;
+            border-radius: 20px 20px 4px 20px;
             max-width: 100%;
             width: fit-content;
             min-width: 60px;
             word-wrap: break-word;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-            line-height: 1.5;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+            line-height: 1.6;
             white-space: normal;
         }
         
@@ -290,16 +333,17 @@
         .message-wrapper:hover .user-actions { opacity: 1; }
         
         .message-assistant {
-            background: #f7f7f8;
+            background: white;
             color: #1a1a1a;
-            padding: 12px 16px;
-            border-radius: 18px;
+            padding: 14px 18px;
+            border-radius: 20px 20px 20px 4px;
             max-width: 70%;
             width: fit-content;
             min-width: 60px;
             word-wrap: break-word;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            line-height: 1.7;
+            border: 1px solid #f0f0f0;
         }
         
         .message-actions {
@@ -318,12 +362,12 @@
         }
         
         .action-btn {
-            width: 28px;
-            height: 28px;
+            width: 30px;
+            height: 30px;
             border: none;
             background: transparent;
             cursor: pointer;
-            border-radius: 6px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -337,7 +381,7 @@
         
         .action-btn:hover {
             background: #f3f4f6;
-            color: #4b5563;
+            color: #667eea;
         }
         
         .action-btn svg { stroke: currentColor; }
@@ -371,56 +415,55 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 12px;
-            background: #f3f4f6;
-            border: 1px solid #e5e7eb;
+            padding: 8px 14px;
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 1px solid #fcd34d;
             border-radius: 20px;
             font-size: 12px;
-            color: #6b7280;
+            color: #92400e;
             transition: all 0.2s;
             user-select: none;
         }
         
         .thinking-toggle:hover {
-            background: #e5e7eb;
-            color: #374151;
+            background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
         }
         
         .thinking-icon { font-size: 14px; }
         
         .thinking-label {
-            font-weight: 500;
+            font-weight: 600;
             white-space: nowrap;
         }
         
         .thinking-arrow {
             font-size: 10px;
             transition: transform 0.2s;
-            color: #9ca3af;
+            color: #b45309;
         }
         
         .thinking-content {
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 8px;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 10px;
             font-size: 13px;
-            color: #4b5563;
+            color: #78350f;
             white-space: pre-wrap;
             word-break: break-word;
-            font-family: 'Courier New', monospace;
-            line-height: 1.5;
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+            line-height: 1.6;
             max-height: 400px;
             overflow-y: auto;
         }
         
         .chat-input-area {
-            padding: 16px;
+            padding: 20px 24px;
             border-top: 1px solid #e5e5e5;
             background: white;
             display: flex;
-            gap: 8px;
+            gap: 12px;
             align-items: flex-end;
         }
         
@@ -431,40 +474,46 @@
         
         .message-input {
             width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
+            padding: 14px 18px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             font-size: 14px;
             resize: none;
-            max-height: 100px;
+            max-height: 120px;
             font-family: inherit;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
+            background: #fafbfc;
         }
         
         .message-input:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            background: white;
         }
         
         .send-btn {
-            padding: 12px 20px;
+            padding: 14px 24px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.2s;
             white-space: nowrap;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            min-width: 80px;
+            gap: 8px;
+            min-width: 90px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
-        .send-btn:hover:not(:disabled) { opacity: 0.9; }
+        .send-btn:hover:not(:disabled) { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
         .send-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -472,24 +521,26 @@
         
         /* 停止按钮样式 */
         .stop-btn {
-            padding: 12px 20px;
-            background: #ef4444;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.2s;
             white-space: nowrap;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            min-width: 80px;
+            gap: 8px;
+            min-width: 90px;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
         
         .stop-btn:hover {
-            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
         }
         
         .modal-overlay {
@@ -510,11 +561,11 @@
         
         .modal {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            max-width: 500px;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            max-width: 520px;
             width: 90%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
             animation: slideUp 0.3s ease-in-out;
         }
@@ -525,14 +576,16 @@
         }
         
         .modal-header {
-            padding: 20px;
+            padding: 24px;
             border-bottom: 1px solid #e5e5e5;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 16px 16px 0 0;
         }
         
-        .modal-header h2 { margin: 0; font-size: 18px; }
+        .modal-header h2 { margin: 0; font-size: 18px; font-weight: 600; }
         
         .modal-close {
             background: none;
@@ -540,16 +593,25 @@
             font-size: 24px;
             cursor: pointer;
             color: #8e8e93;
-            transition: color 0.2s;
+            transition: all 0.2s;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
-        .modal-close:hover { color: #1a1a1a; }
+        .modal-close:hover { 
+            color: #1a1a1a;
+            background: #f3f4f6;
+        }
         
         .modal-body {
-            padding: 20px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 20px;
         }
         
         .form-group {
@@ -559,26 +621,28 @@
         }
         
         .form-group label {
-            font-weight: 500;
+            font-weight: 600;
             font-size: 14px;
             color: #1a1a1a;
         }
         
         .form-group input,
         .form-group select {
-            padding: 10px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
+            padding: 12px 14px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
             font-size: 14px;
             font-family: inherit;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
+            background: #fafbfc;
         }
         
         .form-group input:focus,
         .form-group select:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            background: white;
         }
         
         .api-key-wrapper {
@@ -589,75 +653,117 @@
         .api-key-wrapper input { flex: 1; }
         
         .api-key-wrapper button {
-            padding: 10px 14px;
-            background: #f3f4f6;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border: 2px solid #d1d5db;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 14px;
-            transition: background 0.2s;
+            transition: all 0.2s;
+            white-space: nowrap;
         }
         
-        .api-key-wrapper button:hover { background: #e5e7eb; }
+        .api-key-wrapper button:hover { 
+            background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+        }
+        
+        /* 校验按钮样式 */
+        .validate-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        .validate-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+        
+        .validate-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
         
         .modal-footer {
-            padding: 20px;
+            padding: 20px 24px;
             border-top: 1px solid #e5e5e5;
             display: flex;
             gap: 12px;
             justify-content: flex-end;
+            background: #fafbfc;
+            border-radius: 0 0 16px 16px;
         }
         
         .btn-cancel, .btn-save {
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.2s;
         }
         
         .btn-cancel {
-            background: #f3f4f6;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
             color: #1a1a1a;
+            border: 2px solid #e5e7eb;
         }
         
-        .btn-cancel:hover { background: #e5e7eb; }
+        .btn-cancel:hover { 
+            background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+        }
         
         .btn-save {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
-        .btn-save:hover { opacity: 0.9; }
+        .btn-save:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
         
         .btn-confirm {
-            padding: 10px 24px;
-            background: #ef4444;
+            padding: 12px 28px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
-            font-weight: 500;
-            transition: opacity 0.2s;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
         
-        .btn-confirm:hover { opacity: 0.9; }
+        .btn-confirm:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+        }
         
         .btn-danger {
-            padding: 8px 16px;
-            background: #fee2e2;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
             color: #ef4444;
-            border: 1px solid #fecaca;
-            border-radius: 6px;
+            border: 2px solid #fecaca;
+            border-radius: 8px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.2s;
             font-size: 13px;
         }
         
         .btn-danger:hover {
-            background: #ef4444;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             color: white;
             border-color: #ef4444;
         }
@@ -673,15 +779,15 @@
         .hidden { display: none !important; }
         
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 8px;
+            height: 8px;
         }
         
         ::-webkit-scrollbar-track { background: transparent; }
         
         ::-webkit-scrollbar-thumb {
             background: #d1d5db;
-            border-radius: 3px;
+            border-radius: 4px;
         }
         
         ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
@@ -696,7 +802,7 @@
 
         .memory-card.selected {
             border-color: #667eea;
-            background: #f0f4ff;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 100%);
         }
 
         .memory-nav-btn {
@@ -717,7 +823,7 @@
         .batch-actions {
             display: none;
             padding: 12px 16px;
-            background: #f9fafb;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
             border-bottom: 1px solid #e5e7eb;
             align-items: center;
             gap: 12px;
@@ -754,6 +860,17 @@
             justify-content: center;
             font-size: 10px;
         }
+        
+        /* Toast容器 */
+        #toastContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
@@ -761,14 +878,15 @@
         <!-- 左侧边栏 -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <button class="new-chat-btn" onclick="createNewChat()">+ 新建对话</button>
+                <div class="app-title">🧵 Weaver</div>
+                <button class="new-chat-btn" onclick="createNewChat()">✨ 新建对话</button>
             </div>
             <div class="sessions-list" id="sessionList"></div>
             
             <!-- 记忆统计区域 -->
             <div class="memory-stats" onclick="openMemoryManager()">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <span style="font-size: 13px; color: #6b7280; font-weight: 500;">🧠 三级记忆库</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="font-size: 13px; color: #6b7280; font-weight: 600;">🧠 三级记忆库</span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
@@ -777,7 +895,7 @@
                     <span class="memory-badge" id="longTermCount">
                         📋 长期: 0
                     </span>
-                    <span class="memory-badge" id="workingCount" style="background: #fef3c7; color: #d97706;">
+                    <span class="memory-badge" id="workingCount" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #d97706;">
                         💡 工作: 0
                     </span>
                     <span class="memory-badge" id="shortTermCount">
@@ -801,6 +919,7 @@
         <!-- 主内容区 -->
         <div class="main-content">
             <div class="chat-header">
+                <div class="chat-header-title">💬 智能对话</div>
                 <div style="display: flex; gap: 16px; align-items: center;">
                     <select id="modelSelect" class="model-selector" onchange="switchModel()">
                         <option>加载模型中...</option>
@@ -840,22 +959,22 @@
 
             <style>
             .input-menu-btn {
-                padding: 12px;
-                background: #f3f4f6;
-                border: 1px solid #d1d5db;
-                border-radius: 8px;
+                padding: 14px;
+                background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+                border: 2px solid #d1d5db;
+                border-radius: 12px;
                 cursor: pointer;
                 color: #6b7280;
                 transition: all 0.2s;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                height: 44px;
-                width: 44px;
+                height: 48px;
+                width: 48px;
             }
 
             .input-menu-btn:hover {
-                background: #e5e7eb;
+                background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
                 color: #4b5563;
             }
 
@@ -863,17 +982,17 @@
                 position: fixed;
                 background: white;
                 border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+                border-radius: 12px;
+                box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.12);
                 z-index: 10000;
                 min-width: 180px;
-                padding: 6px;
+                padding: 8px;
             }
 
             .input-dropdown .menu-item {
-                padding: 10px 12px;
+                padding: 12px 14px;
                 cursor: pointer;
-                border-radius: 6px;
+                border-radius: 8px;
                 font-size: 14px;
                 display: flex;
                 align-items: center;
@@ -883,7 +1002,7 @@
             }
 
             .input-dropdown .menu-item:hover {
-                background: #f3f4f6;
+                background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
             }
             </style>
         </div>
@@ -891,9 +1010,9 @@
     
     <!-- 设置模态框 -->
     <div class="modal-overlay hidden" id="settingsModal">
-        <div class="modal" style="max-width: 500px;">
+        <div class="modal" style="max-width: 520px;">
             <div class="modal-header">
-                <h2>API 设置</h2>
+                <h2>⚙️ API 设置</h2>
                 <button class="modal-close" onclick="closeSettings()">×</button>
             </div>
             <div class="modal-body">
@@ -902,14 +1021,17 @@
                     <div class="api-key-wrapper">
                         <input type="password" id="config_OPENAI_API_KEY" placeholder="sk-..." style="flex: 1;">
                         <button type="button" onclick="toggleApiKeyVisibility()" style="white-space: nowrap;">👁️ 显示</button>
+                        <button type="button" id="validateApiBtn" class="validate-btn" onclick="validateApiKey()">
+                            ✓ 校验
+                        </button>
                     </div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">您的 API Key 仅存储在本地</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 6px;">您的 API Key 仅存储在本地</div>
                 </div>
 
                 <div class="form-group">
                     <label>API Base URL</label>
                     <input type="text" id="config_OPENAI_BASE_URL" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1">
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">如果使用第三方 API 服务请修改此项</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 6px;">如果使用第三方 API 服务请修改此项</div>
                 </div>
 
                 <div class="form-group">
@@ -926,14 +1048,16 @@
 
                 <div class="form-group">
                     <label>记忆处理专用模型</label>
-                    <input type="text" id="config_MEMORY_MODEL" placeholder="例如: glm-4-plus, gpt-4o">
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">用于记忆提取和合并的AI模型</div>
+                    <select id="config_MEMORY_MODEL" style="width: 100%;">
+                        <option value="">-- 先校验API获取模型列表 --</option>
+                    </select>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 6px;">用于记忆提取和合并的AI模型，点击上方"校验"按钮获取可用模型</div>
                 </div>
 
                 <div class="form-group">
                     <label>工作记忆容量</label>
                     <input type="number" id="config_WORKING_MEMORY_CAPACITY" value="10" min="5" max="50">
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">工作记忆最大保存条数（5-50）</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 6px;">工作记忆最大保存条数（5-50）</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -947,11 +1071,11 @@
     <div class="modal-overlay hidden" id="promptModal">
         <div class="modal" style="max-width: 700px; max-height: 85vh;">
             <div class="modal-header">
-                <h2>提示词设置</h2>
+                <h2>📝 提示词设置</h2>
                 <button class="modal-close" onclick="closePromptSettings()">×</button>
             </div>
             <div class="modal-body">
-                <div style="background: #f9fafb; padding: 12px; border-radius: 8px; font-size: 13px; color: #6b7280;">
+                <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 14px; border-radius: 10px; font-size: 13px; color: #0369a1; border: 1px solid #bae6fd;">
                     <strong>说明：</strong>修改系统提示词（System Prompt）会改变 AI 的行为方式。
                 </div>
                 
@@ -959,7 +1083,7 @@
                     <label>系统提示词 (System Prompt)</label>
                     <textarea 
                         id="systemPromptInput" 
-                        style="width: 100%; min-height: 300px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.6;"
+                        style="width: 100%; min-height: 300px; padding: 14px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; font-family: inherit; resize: vertical; line-height: 1.6;"
                         placeholder="输入系统提示词..."
                     ></textarea>
                 </div>
@@ -978,7 +1102,7 @@
         <div class="modal" style="max-width: 800px; max-height: 85vh; display: flex; flex-direction: column;">
             <div class="modal-header" style="border-bottom: 2px solid #f3f4f6;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <h2 style="margin: 0; font-size: 20px; font-weight: 600;">三级记忆管理</h2>
+                    <h2 style="margin: 0; font-size: 20px; font-weight: 600;">🧠 三级记忆管理</h2>
                     <span id="memoryStatsBadge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                         color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;">
                         长期:0 | 工作:0 | 短期:0
@@ -989,7 +1113,7 @@
             
             <div style="display: flex; flex: 1; overflow: hidden;">
                 <!-- 左侧标签栏 -->
-                <div style="width: 140px; border-right: 1px solid #e5e7eb; background: #f9fafb; padding: 16px 0;">
+                <div style="width: 140px; border-right: 1px solid #e5e7eb; background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); padding: 16px 0;">
                     <button class="memory-nav-btn active" onclick="switchMemoryTab('long')" id="nav-long" 
                             style="width: 100%; padding: 12px 16px; border: none; background: transparent; 
                                 cursor: pointer; text-align: left; font-size: 14px; border-left: 3px solid transparent;
@@ -1039,8 +1163,8 @@
                     </div>
 
                     <!-- 长期记忆添加区 -->
-                    <div id="addMemoryContainer" style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: #fafafa;">
-                        <div style="font-size: 13px; color: #667eea; margin-bottom: 8px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                    <div id="addMemoryContainer" style="padding: 16px; border-bottom: 1px solid #e5e7eb; background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);">
+                        <div style="font-size: 13px; color: #667eea; margin-bottom: 10px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                 <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1049,12 +1173,12 @@
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <input type="text" id="manualMemoryInput" placeholder="输入重要信息（如：用户是程序员，喜欢Python）..." 
-                                style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none;"
+                                style="flex: 1; padding: 12px 14px; border: 2px solid #d1d5db; border-radius: 10px; font-size: 14px; outline: none;"
                                 onkeydown="if(event.key==='Enter') addMemoryManually()">
                             <button onclick="addMemoryManually()" 
-                                    style="padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                        color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; 
-                                        font-weight: 500;">
+                                    style="padding: 12px 22px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                        color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; 
+                                        font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
                                 保存
                             </button>
                         </div>
@@ -1075,7 +1199,7 @@
                     清空当前类型
                 </button>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-cancel" onclick="closeMemoryManager()" style="background: white; border: 1px solid #d1d5db;">关闭</button>
+                    <button class="btn-cancel" onclick="closeMemoryManager()" style="background: white; border: 2px solid #d1d5db;">关闭</button>
                     <button class="btn-save" onclick="refreshMemories()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: middle; margin-right: 4px;">
                             <polyline points="23 4 23 10 17 10"></polyline>
@@ -1087,6 +1211,20 @@
             </div>
         </div>
     </div>
+    
+    <!-- 确认对话框 -->
+    <div class="modal-overlay hidden" id="confirmDialogOverlay">
+        <div class="modal" style="max-width: 400px;">
+            <div class="confirm-dialog-content" id="confirmDialogContent">确定要执行此操作吗？</div>
+            <div class="confirm-dialog-buttons">
+                <button class="btn-cancel" onclick="closeConfirmDialog()">取消</button>
+                <button class="btn-confirm" id="confirmDialogBtn">确定</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast 容器 -->
+    <div id="toastContainer"></div>
     
     <script src="/static/app.js"></script>
 </body>

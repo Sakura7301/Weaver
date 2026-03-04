@@ -5,6 +5,7 @@ import os
 import re
 import time
 import sqlite3
+import requests
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv, set_key
@@ -135,6 +136,99 @@ def save_config():
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"保存配置失败: {e}")
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route('/api/validate-api', methods=['POST'])
+def validate_api():
+    """校验 API Key 和 Base URL，返回可用模型列表"""
+    try:
+        data = request.json
+        api_key = data.get('api_key', '').strip()
+        base_url = data.get('base_url', '').strip() or 'https://api.openai.com/v1'
+        
+        if not api_key:
+            return jsonify({"success": False, "error": "API Key 不能为空"})
+        
+        # 移除末尾的斜杠
+        if base_url.endswith('/'):
+            base_url = base_url[:-1]
+        
+        logger.info(f"校验 API: {base_url}")
+        
+        # 尝试获取模型列表
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # 尝试 OpenAI 兼容的 models 端点
+        models_url = f"{base_url}/models"
+        
+        response = requests.get(models_url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            models_data = response.json()
+            
+            # 解析模型列表
+            models = []
+            raw_models = models_data.get('data', models_data.get('models', []))
+            
+            for m in raw_models:
+                if isinstance(m, dict):
+                    model_id = m.get('id', m.get('name', ''))
+                    if model_id:
+                        models.append({
+                            "id": model_id,
+                            "name": m.get('name', model_id),
+                            "features": {
+                                "vision": 'vision' in model_id.lower() or 'gpt-4' in model_id.lower(),
+                                "tools": True,  # 假设大多数模型支持工具调用
+                                "reasoning": 'reasoning' in model_id.lower() or 'o1' in model_id.lower(),
+                                "fast": 'fast' in model_id.lower() or 'lite' in model_id.lower() or 'mini' in model_id.lower()
+                            }
+                        })
+                elif isinstance(m, str):
+                    models.append({
+                        "id": m,
+                        "name": m,
+                        "features": {
+                            "vision": 'vision' in m.lower() or 'gpt-4' in m.lower(),
+                            "tools": True,
+                            "reasoning": 'reasoning' in m.lower() or 'o1' in m.lower(),
+                            "fast": 'fast' in m.lower() or 'lite' in m.lower() or 'mini' in m.lower()
+                        }
+                    })
+            
+            # 按名称排序
+            models.sort(key=lambda x: x['id'])
+            
+            logger.info(f"API 校验成功，获取到 {len(models)} 个模型")
+            return jsonify({
+                "success": True,
+                "models": models,
+                "message": f"校验成功，获取到 {len(models)} 个可用模型"
+            })
+        else:
+            error_msg = f"API 返回错误: HTTP {response.status_code}"
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', error_msg)
+            except:
+                pass
+            
+            logger.error(f"API 校验失败: {error_msg}")
+            return jsonify({"success": False, "error": error_msg})
+            
+    except requests.exceptions.Timeout:
+        logger.error("API 校验超时")
+        return jsonify({"success": False, "error": "请求超时，请检查网络连接"})
+    except requests.exceptions.ConnectionError:
+        logger.error("API 连接失败")
+        return jsonify({"success": False, "error": "无法连接到 API 服务器，请检查 Base URL"})
+    except Exception as e:
+        logger.error(f"API 校验失败: {e}")
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -500,43 +594,62 @@ def handle_chat(data):
 
 @socketio.on('regenerate')
 def handle_regenerate(data):
-    """重新生成回复"""
+    """重新生成回复 - 支持指定用户消息索引"""
     session_id = data.get('session_id')
+    user_msg_index = data.get('user_msg_index', -1)  # 获取要重新生成的用户消息索引
     
     if not session_id:
         emit('error', {"message": "无效的会话"})
         return
     
     try:
-        # 获取会话并移除最后一条AI回复
+        # 获取会话
         session = chat_history.get_session(session_id)
         messages = session['messages']
         
-        logger.info(f"重新生成回复 (会话ID: {session_id})")
+        logger.info(f"重新生成回复 (会话ID: {session_id}, 用户消息索引: {user_msg_index})")
         
-        # 找到最后一条用户消息
-        last_user_msg = None
-        last_user_idx = -1
+        # 根据索引找到对应的用户消息
+        target_user_msg = None
+        target_user_idx = -1
         
-        for i in range(len(messages) - 1, -1, -1):
-            if messages[i]['role'] == 'user':
-                last_user_msg = messages[i]['content']
-                last_user_idx = i
-                break
+        if user_msg_index >= 0:
+            # 如果指定了索引，找到该索引对应的用户消息
+            for i in range(user_msg_index, -1, -1):
+                if i < len(messages) and messages[i]['role'] == 'user':
+                    target_user_msg = messages[i]['content']
+                    target_user_idx = i
+                    break
+        else:
+            # 兼容旧逻辑：找最后一条用户消息
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]['role'] == 'user':
+                    target_user_msg = messages[i]['content']
+                    target_user_idx = i
+                    break
         
-        if not last_user_msg:
+        if not target_user_msg:
             emit('error', {"message": "找不到用户消息"})
             return
         
-        # 使用到最后一条用户消息之前的历史
-        history = messages[:last_user_idx]
+        # 使用到目标用户消息之前的历史
+        history = messages[:target_user_idx]
+        
+        # 删除该用户消息之后的所有AI回复
+        messages_to_keep = []
+        for i, msg in enumerate(messages):
+            if i <= target_user_idx:
+                messages_to_keep.append(msg)
+        
+        # 更新会话消息
+        session['messages'] = messages_to_keep
         
         # 流式响应
         start_time = time.time()
         full_response = ""
         thinking_content = ""
         
-        for chunk in agent_manager.chat_stream(last_user_msg, history):
+        for chunk in agent_manager.chat_stream(target_user_msg, history):
             chunk_type = chunk.get('type')
             content = chunk.get('content', '')
             
@@ -560,10 +673,7 @@ def handle_regenerate(data):
         duration = time.time() - start_time
         logger.info(f"重新生成完成，耗时: {duration:.2f}s")
         
-        # 移除旧的AI回复并保存新的
-        if messages and messages[-1]['role'] == 'assistant':
-            messages.pop()
-        
+        # 保存新的AI回复
         response_with_thinking = full_response
         if thinking_content:
             response_with_thinking = f"<thinking>{thinking_content}</thinking>\n{full_response}"
@@ -614,7 +724,7 @@ if __name__ == '__main__':
     logger.info(f"访问地址: http://{host}:{port}")
     logger.info("=" * 50)
     
-    socketio.run(app, host=host, port=port, debug=False, use_reloader=False)
+    socketio.run(app, host=host, port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
 
 
 @app.route('/api/memory/process', methods=['POST'])
