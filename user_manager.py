@@ -14,7 +14,7 @@ from log import logger
 load_dotenv()
 
 # 用户数据库路径
-USER_DB_PATH = "users.db"
+USER_DB_PATH = f"{os.getenv("USER_SQL_PATH").lower()}/users.db"
 
 # 密码最小长度
 MIN_PASSWORD_LENGTH = 8
@@ -38,6 +38,10 @@ class UserManager:
     
     def _init_db(self):
         """初始化用户数据库"""
+        # 若数据库所在目录不存在，则自动递归创建
+        db_dir = os.path.dirname(USER_DB_PATH)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         conn = self._get_conn()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
