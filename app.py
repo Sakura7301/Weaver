@@ -1,12 +1,12 @@
 """
-Flask Web 应用 - 支持三级记忆架构
+Flask Web 应用 - 支持三级记忆架构和用户管理
 """
 import os
 import re
 import time
 import sqlite3
 import requests
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv, set_key
 from agent_manager import AgentManager
@@ -15,6 +15,7 @@ from datetime import datetime
 from log import logger
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from user_manager import user_manager
 
 # 保存提示词到文件
 PROMPT_FILE = "system_prompt.txt"
@@ -28,13 +29,14 @@ DEFAULT_PROMPT = """你是一个智能助手，回答要简洁准确，使用中
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-agent_manager = AgentManager()
+# 用户专属的Agent管理器和聊天历史
+user_agents = {}  # {username: AgentManager}
 chat_history = ChatHistory()
 
-current_session = None
+current_session = {}  # {username: session_id}
 
 # 初始化定时任务
 scheduler = BackgroundScheduler()
@@ -72,17 +74,40 @@ def schedule_memory_merge():
 def merge_memories_task():
     """执行记忆合并的后台任务"""
     try:
-        if agent_manager.memory_system:
-            logger.info("执行定期记忆处理...")
-            # 第1步：将短期记忆中的重要信息转为长期记忆
-            agent_manager.memory_system.process_short_term_to_long_term()
-            # 第2步：合并相似的长期记忆（已有功能）
-            agent_manager.memory_system.merge_similar_memories()
+        # 对所有在线用户的记忆系统执行合并
+        for username, agent_manager in user_agents.items():
+            if agent_manager.memory_system:
+                logger.info(f"执行用户 {username} 的定期记忆处理...")
+                # 第1步：将短期记忆中的重要信息转为长期记忆
+                agent_manager.memory_system.process_short_term_to_long_term()
+                # 第2步：合并相似的长期记忆
+                agent_manager.memory_system.merge_similar_memories()
     except Exception as e:
         logger.error(f"记忆处理任务失败: {e}")
 
 # 启动时设置定时任务
 schedule_memory_merge()
+
+def get_current_user():
+    """获取当前登录用户"""
+    return session.get('username')
+
+def get_user_agent(username: str) -> AgentManager:
+    """获取用户的Agent管理器"""
+    if username not in user_agents:
+        user_agents[username] = AgentManager(username)
+    return user_agents[username]
+
+def require_login(f):
+    """登录验证装饰器"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        username = get_current_user()
+        if not username:
+            return jsonify({"success": False, "error": "请先登录"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @app.route('/')
@@ -90,81 +115,250 @@ def index():
     return render_template('index.html')
 
 
+# ============ 用户认证 API ============
+
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    """获取当前登录状态"""
+    username = get_current_user()
+    if username:
+        is_admin = user_manager.is_admin(username)
+        return jsonify({
+            "logged_in": True,
+            "username": username,
+            "is_admin": is_admin
+        })
+    return jsonify({"logged_in": False})
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """用户登录"""
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    success, message, user_info = user_manager.login(username, password)
+    
+    if success:
+        session['username'] = user_info['username']
+        session['is_admin'] = user_info['is_admin']
+        
+        # 初始化用户的Agent管理器
+        get_user_agent(user_info['username'])
+        
+        return jsonify({
+            "success": True,
+            "message": message,
+            "user": user_info
+        })
+    
+    return jsonify({"success": False, "message": message})
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """用户注册"""
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    success, message = user_manager.register(username, password)
+    return jsonify({"success": success, "message": message})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """用户登出"""
+    username = get_current_user()
+    if username and username in user_agents:
+        # 清理用户的Agent管理器
+        del user_agents[username]
+    
+    session.clear()
+    return jsonify({"success": True, "message": "已退出登录"})
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@require_login
+def change_password():
+    """修改密码"""
+    data = request.json
+    old_password = data.get('old_password', '')
+    new_password = data.get('new_password', '')
+    
+    username = get_current_user()
+    success, message = user_manager.change_password(username, old_password, new_password)
+    return jsonify({"success": success, "message": message})
+
+
+# ============ 管理员 API ============
+
+@app.route('/api/admin/users', methods=['GET'])
+@require_login
+def get_users():
+    """获取用户列表（仅管理员）"""
+    username = get_current_user()
+    success, users = user_manager.get_all_users(username)
+    
+    if not success:
+        return jsonify({"success": False, "error": "权限不足"}), 403
+    
+    return jsonify({"success": True, "users": users})
+
+
+@app.route('/api/admin/users/<target_username>/password', methods=['GET'])
+@require_login
+def get_user_password(target_username):
+    """获取用户密码信息（仅管理员）"""
+    username = get_current_user()
+    success, message = user_manager.get_user_password(username, target_username)
+    
+    if not success:
+        return jsonify({"success": False, "error": message}), 403
+    
+    return jsonify({"success": True, "message": message})
+
+
+@app.route('/api/admin/users/<target_username>/password', methods=['POST'])
+@require_login
+def admin_change_user_password(target_username):
+    """管理员修改用户密码"""
+    username = get_current_user()
+    data = request.json
+    new_password = data.get('new_password', '')
+    
+    success, message = user_manager.admin_change_password(username, target_username, new_password)
+    return jsonify({"success": success, "message": message})
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@require_login
+def admin_create_user():
+    """管理员创建用户"""
+    username = get_current_user()
+    data = request.json
+    new_username = data.get('username', '').strip()
+    new_password = data.get('password', '')
+    
+    success, message = user_manager.create_user_by_admin(username, new_username, new_password)
+    return jsonify({"success": success, "message": message})
+
+
+@app.route('/api/admin/users/<target_username>', methods=['DELETE'])
+@require_login
+def admin_delete_user(target_username):
+    """管理员删除用户"""
+    username = get_current_user()
+    success, message = user_manager.delete_user(username, target_username)
+    return jsonify({"success": success, "message": message})
+
+
+# ============ 模型和配置 API ============
+
 @app.route('/api/models', methods=['GET'])
+@require_login
 def get_models():
     """获取模型列表（包含特性信息）"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
     return jsonify(agent_manager.fetch_models())
 
 
 @app.route('/api/config', methods=['GET'])
+@require_login
 def get_config():
-    """获取配置（移除日志相关，添加记忆频率和记忆模型）"""
+    """获取配置"""
+    username = get_current_user()
+    is_admin = user_manager.is_admin(username)
+    agent_manager = get_user_agent(username)
+    
     config = {
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
-        "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL", ""),
         "MEMORY_ENABLED": str(agent_manager.memory_system is not None),
         "CURRENT_MODEL": agent_manager.current_model,
-        "MEMORY_MODEL": os.getenv("MEMORY_MODEL", "glm-4-plus"),  # 记忆处理专用模型
+        "MEMORY_MODEL": os.getenv("MEMORY_MODEL", "glm-4-plus"),
         "MEMORY_INTERVAL_VALUE": os.getenv("MEMORY_INTERVAL_VALUE", "30"),
         "MEMORY_INTERVAL_UNIT": os.getenv("MEMORY_INTERVAL_UNIT", "minutes"),
-        "WORKING_MEMORY_CAPACITY": os.getenv("WORKING_MEMORY_CAPACITY", "10")
+        "WORKING_MEMORY_CAPACITY": os.getenv("WORKING_MEMORY_CAPACITY", "10"),
+        "IS_ADMIN": is_admin
     }
+    
+    # 仅管理员可见API配置
+    if is_admin:
+        config["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
+        config["OPENAI_BASE_URL"] = os.getenv("OPENAI_BASE_URL", "")
+    
     return jsonify(config)
 
 
 @app.route('/api/config', methods=['POST'])
+@require_login
 def save_config():
-    """保存配置（移除日志相关，添加记忆频率和记忆模型）"""
-    try:
-        config = request.json
-        
-        # 保存到 .env 文件
-        env_file = ".env"
-        for key, value in config.items():
-            if key.startswith("OPENAI_"):
-                set_key(env_file, key, value)
-            elif key in ["MEMORY_INTERVAL_VALUE", "MEMORY_INTERVAL_UNIT", "MEMORY_MODEL", "WORKING_MEMORY_CAPACITY"]:
-                set_key(env_file, key, str(value))
-        
-        # 重新加载配置并更新定时任务
-        load_dotenv(override=True)
-        schedule_memory_merge()
-        
-        # 重新初始化 Agent（如果API配置变更）
-        agent_manager.reload_config()
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        logger.error(f"保存配置失败: {e}")
-        return jsonify({"success": False, "error": str(e)})
+    """保存配置"""
+    username = get_current_user()
+    is_admin = user_manager.is_admin(username)
+    
+    if not is_admin:
+        return jsonify({"success": False, "error": "权限不足，只有管理员可以修改配置"}), 403
+    
+    config = request.json
+    
+    # 保存到 .env 文件
+    env_file = ".env"
+    for key, value in config.items():
+        if key.startswith("OPENAI_"):
+            set_key(env_file, key, value)
+        elif key in ["MEMORY_INTERVAL_VALUE", "MEMORY_INTERVAL_UNIT", "MEMORY_MODEL", "WORKING_MEMORY_CAPACITY"]:
+            set_key(env_file, key, str(value))
+    
+    # 重新加载配置并更新定时任务
+    load_dotenv(override=True)
+    schedule_memory_merge()
+    
+    # 重新初始化所有用户的Agent
+    for uname in user_agents:
+        user_agents[uname].reload_config()
+    
+    return jsonify({"success": True})
 
 
 @app.route('/api/validate-api', methods=['POST'])
+@require_login
 def validate_api():
     """校验 API Key 和 Base URL，返回可用模型列表"""
-    try:
-        data = request.json
+    username = get_current_user()
+    is_admin = user_manager.is_admin(username)
+    
+    data = request.json
+    
+    # 非管理员只能验证当前配置
+    if not is_admin:
+        agent_manager = get_user_agent(username)
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        base_url = os.getenv("OPENAI_BASE_URL", "")
+    else:
         api_key = data.get('api_key', '').strip()
         base_url = data.get('base_url', '').strip() or 'https://api.openai.com/v1'
-        
-        if not api_key:
-            return jsonify({"success": False, "error": "API Key 不能为空"})
-        
-        # 移除末尾的斜杠
-        if base_url.endswith('/'):
-            base_url = base_url[:-1]
-        
-        logger.info(f"校验 API: {base_url}")
-        
-        # 尝试获取模型列表
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        # 尝试 OpenAI 兼容的 models 端点
-        models_url = f"{base_url}/models"
-        
+    
+    if not api_key:
+        return jsonify({"success": False, "error": "API Key 不能为空"})
+    
+    # 移除末尾的斜杠
+    if base_url.endswith('/'):
+        base_url = base_url[:-1]
+    
+    logger.info(f"校验 API: {base_url}")
+    
+    # 尝试获取模型列表
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # 尝试 OpenAI 兼容的 models 端点
+    models_url = f"{base_url}/models"
+    
+    try:
         response = requests.get(models_url, headers=headers, timeout=10)
         
         if response.status_code == 200:
@@ -183,7 +377,7 @@ def validate_api():
                             "name": m.get('name', model_id),
                             "features": {
                                 "vision": 'vision' in model_id.lower() or 'gpt-4' in model_id.lower(),
-                                "tools": True,  # 假设大多数模型支持工具调用
+                                "tools": True,
                                 "reasoning": 'reasoning' in model_id.lower() or 'o1' in model_id.lower(),
                                 "fast": 'fast' in model_id.lower() or 'lite' in model_id.lower() or 'mini' in model_id.lower()
                             }
@@ -232,41 +426,52 @@ def validate_api():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ============ 会话管理 API ============
+
 @app.route('/api/sessions', methods=['GET'])
+@require_login
 def get_sessions():
     """获取对话列表"""
-    return jsonify(chat_history.get_all_sessions())
+    username = get_current_user()
+    return jsonify(chat_history.get_all_sessions(username))
 
 
 @app.route('/api/sessions', methods=['POST'])
+@require_login
 def create_session():
     """创建新对话"""
-    global current_session
-    session_id = chat_history.create_session()
-    current_session = session_id
+    username = get_current_user()
+    session_id = chat_history.create_session(username)
+    current_session[username] = session_id
     return jsonify({"session_id": session_id})
 
 
 @app.route('/api/sessions/<session_id>', methods=['GET'])
+@require_login
 def get_session(session_id):
     """获取对话内容"""
-    return jsonify(chat_history.get_session(session_id))
+    username = get_current_user()
+    return jsonify(chat_history.get_session(username, session_id))
 
 
 @app.route('/api/sessions/<session_id>', methods=['DELETE'])
+@require_login
 def delete_session(session_id):
     """删除对话"""
-    chat_history.delete_session(session_id)
+    username = get_current_user()
+    chat_history.delete_session(username, session_id)
     return jsonify({"success": True})
 
 
 @app.route('/api/sessions/<session_id>/rename', methods=['POST'])
+@require_login
 def rename_session(session_id):
     """重命名对话"""
+    username = get_current_user()
     try:
         data = request.json
         new_title = data.get('title', '新对话')
-        chat_history.rename_session(session_id, new_title)
+        chat_history.rename_session(username, session_id, new_title)
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"重命名失败: {e}")
@@ -274,31 +479,36 @@ def rename_session(session_id):
 
 
 @app.route('/api/sessions/all', methods=['DELETE'])
+@require_login
 def clear_all_sessions():
     """清空所有对话"""
+    username = get_current_user()
     try:
-        chat_history.clear_all_sessions()
-        global current_session
-        if current_session:
-            current_session = None
+        chat_history.clear_all_sessions(username)
+        if username in current_session:
+            current_session[username] = None
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"清空失败: {e}")
         return jsonify({"success": False, "error": str(e)})
 
 
+# ============ 记忆管理 API ============
+
 @app.route('/api/memory/all', methods=['GET'])
+@require_login
 def get_all_memories():
     """获取所有记忆（支持三种类型）"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         memory_type = request.args.get('type', 'long')
         
         if memory_type == 'long':
-            # 获取长期记忆
             if agent_manager.memory_system:
                 try:
                     memories = agent_manager.export_long_term_memories()
-                    # 确保返回的是列表，且每个项目包含必要字段
                     formatted_memories = []
                     for m in memories:
                         if isinstance(m, dict) and 'id' in m and 'content' in m:
@@ -314,7 +524,6 @@ def get_all_memories():
                     return jsonify({"memories": []})
         
         elif memory_type == 'working':
-            # 获取工作记忆
             if agent_manager.memory_system:
                 working_memories = agent_manager.export_working_memories()
                 formatted_memories = []
@@ -330,7 +539,6 @@ def get_all_memories():
                 return jsonify({"memories": formatted_memories})
         
         else:
-            # 短期记忆逻辑：从session_log.md文件读取
             memories = []
             if agent_manager.memory_system:
                 session_file = os.path.join(
@@ -341,21 +549,17 @@ def get_all_memories():
                     with open(session_file, 'r', encoding='utf-8') as f:
                         content = f.read()
                     
-                    # 解析session_log.md格式
-                    # 格式: ## 时间戳\n**User**: 内容\n**Assistant**: 内容\n---
                     turns = content.split('---')
                     for i, turn in enumerate(turns):
                         turn = turn.strip()
                         if not turn:
                             continue
                         
-                        # 提取时间戳
                         lines = turn.split('\n')
                         timestamp = ''
                         if lines and lines[0].startswith('## '):
                             timestamp = lines[0][3:].strip()
                         
-                        # 提取用户消息
                         user_match = re.search(r'\*\*User\*\*:\s*(.*?)(?=\*\*Assistant\*\*|$)', turn, re.DOTALL)
                         if user_match:
                             user_content = user_match.group(1).strip()[:200]
@@ -369,7 +573,6 @@ def get_all_memories():
                                     "role": "user"
                                 })
                         
-                        # 提取AI回复
                         assistant_match = re.search(r'\*\*Assistant\*\*:\s*(.*?)$', turn, re.DOTALL)
                         if assistant_match:
                             ai_content = assistant_match.group(1).strip()[:200]
@@ -388,12 +591,16 @@ def get_all_memories():
         return jsonify({"memories": []})
     except Exception as e:
         logger.error(f"获取记忆列表失败: {e}")
-        return jsonify({"memories": []})  # 出错也返回空数组，不要报错
+        return jsonify({"memories": []})
 
 
 @app.route('/api/memory/stats', methods=['GET'])
+@require_login
 def get_memory_stats():
-    """获取记忆统计（三级记忆）"""
+    """获取记忆统计"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         stats = agent_manager.get_memory_stats()
         return jsonify(stats)
@@ -403,8 +610,12 @@ def get_memory_stats():
 
 
 @app.route('/api/memory/save', methods=['POST'])
+@require_login
 def save_memory():
     """手动保存记忆"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         data = request.json
         content = data.get('content', '')
@@ -417,7 +628,6 @@ def save_memory():
             if memory_type == 'long':
                 success = agent_manager.memory_system.save_long_term(content)
             elif memory_type == 'working':
-                # 工作记忆需要 key 和 value
                 key = data.get('key', '用户输入')
                 success = agent_manager.add_working_memory(key, content, priority=1)['success']
             else:
@@ -430,8 +640,12 @@ def save_memory():
 
 
 @app.route('/api/memory/<memory_id>', methods=['DELETE'])
+@require_login
 def delete_memory(memory_id):
     """删除单条记忆"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         memory_type = request.args.get('type', 'long')
         
@@ -450,8 +664,12 @@ def delete_memory(memory_id):
 
 
 @app.route('/api/memory/batch-delete', methods=['POST'])
+@require_login
 def batch_delete_memories():
     """批量删除记忆"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         data = request.json
         memory_type = data.get('type', 'long')
@@ -468,8 +686,12 @@ def batch_delete_memories():
 
 
 @app.route('/api/memory/clear', methods=['POST'])
+@require_login
 def clear_memory():
     """清空指定类型的所有记忆"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         data = request.json
         memory_type = data.get('type', 'long')
@@ -481,7 +703,10 @@ def clear_memory():
         return jsonify({"success": False, "error": str(e)})
 
 
+# ============ 提示词 API ============
+
 @app.route('/api/prompt', methods=['GET'])
+@require_login
 def get_prompt():
     """获取当前提示词"""
     try:
@@ -501,18 +726,19 @@ def get_prompt():
 
 
 @app.route('/api/prompt', methods=['POST'])
+@require_login
 def save_prompt():
     """保存提示词"""
     try:
         data = request.json
         prompt = data.get('prompt', '')
         
-        # 保存到文件
         with open(PROMPT_FILE, 'w', encoding='utf-8') as f:
             f.write(prompt)
         
-        # 重新加载 Agent
-        agent_manager.reload_config()
+        # 重新初始化所有用户的Agent
+        for username in user_agents:
+            user_agents[username].reload_config()
         
         return jsonify({"success": True})
     except Exception as e:
@@ -520,32 +746,57 @@ def save_prompt():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============ Socket.IO 事件处理 ============
+
+@socketio.on('connect')
+def handle_connect():
+    """连接时检查登录状态"""
+    # Socket.IO 无法直接访问 Flask session
+    # 客户端需要在连接后发送认证信息
+    pass
+
+
+@socketio.on('auth')
+def handle_socket_auth(data):
+    """Socket.IO 认证"""
+    username = data.get('username')
+    if username and username in user_agents:
+        # 认证成功
+        emit('auth_success', {"username": username})
+    else:
+        emit('auth_failed', {"message": "请先登录"})
+
+
 @socketio.on('chat')
 def handle_chat(data):
-    """处理聊天消息 - 真正的流式响应"""
-    global current_session
+    """处理聊天消息"""
+    username = data.get('username')
+    if not username or username not in user_agents:
+        emit('error', {"message": "请先登录"})
+        return
     
+    agent_manager = get_user_agent(username)
     message = data.get('message', '')
-    session_id = data.get('session_id') or current_session
+    session_id = data.get('session_id') or current_session.get(username)
     
     if not message.strip():
         emit('error', {"message": "消息不能为空"})
         return
     
     if not session_id:
-        session_id = chat_history.create_session()
-        current_session = session_id
+        session_id = chat_history.create_session(username)
+        current_session[username] = session_id
         emit('session_created', {"session_id": session_id})
     
     # 保存用户消息
-    chat_history.add_message(session_id, 'user', message)
+    chat_history.add_message(username, session_id, 'user', message)
     
     try:
         # 获取历史消息
-        session_data = chat_history.get_session(session_id)
+        session_data = chat_history.get_session(username, session_id)
         messages = session_data['messages']
         
-        logger.info(f"处理消息: {message[:50]}... (会话ID: {session_id})")
+        logger.info(f"处理消息: {message[:50]}... (用户: {username}, 会话ID: {session_id})")
         
         # 流式响应
         start_time = time.time()
@@ -558,7 +809,6 @@ def handle_chat(data):
             content = chunk.get('content', '')
             
             if chunk_type == 'stopped':
-                # 用户停止了生成
                 emit('stopped', {"message": chunk.get('message', '已停止')})
                 break
             
@@ -573,17 +823,17 @@ def handle_chat(data):
             elif chunk_type == 'tool_result':
                 emit('tool_result', {"name": chunk.get('name'), "result": chunk.get('result')})
             
-            socketio.sleep(0.01)  # 让出控制权，确保前端能收到事件
+            socketio.sleep(0.01)
         
         duration = time.time() - start_time
         logger.info(f"流式完成，耗时: {duration:.2f}s")
         
-        # 保存 AI 回复（包含思考过程用于历史记录显示）
+        # 保存 AI 回复
         response_with_thinking = full_response
         if thinking_content:
             response_with_thinking = f"<thinking>{thinking_content}</thinking>\n{full_response}"
         
-        chat_history.add_message(session_id, 'assistant', response_with_thinking, duration)
+        chat_history.add_message(username, session_id, 'assistant', response_with_thinking, duration)
         
         emit('stream_end', {"duration": round(duration, 2), "thinking": thinking_content})
         
@@ -594,34 +844,36 @@ def handle_chat(data):
 
 @socketio.on('regenerate')
 def handle_regenerate(data):
-    """重新生成回复 - 支持指定用户消息索引"""
+    """重新生成回复"""
+    username = data.get('username')
+    if not username or username not in user_agents:
+        emit('error', {"message": "请先登录"})
+        return
+    
+    agent_manager = get_user_agent(username)
     session_id = data.get('session_id')
-    user_msg_index = data.get('user_msg_index', -1)  # 获取要重新生成的用户消息索引
+    user_msg_index = data.get('user_msg_index', -1)
     
     if not session_id:
         emit('error', {"message": "无效的会话"})
         return
     
     try:
-        # 获取会话
-        session = chat_history.get_session(session_id)
+        session = chat_history.get_session(username, session_id)
         messages = session['messages']
         
-        logger.info(f"重新生成回复 (会话ID: {session_id}, 用户消息索引: {user_msg_index})")
+        logger.info(f"重新生成回复 (用户: {username}, 会话ID: {session_id}, 用户消息索引: {user_msg_index})")
         
-        # 根据索引找到对应的用户消息
         target_user_msg = None
         target_user_idx = -1
         
         if user_msg_index >= 0:
-            # 如果指定了索引，找到该索引对应的用户消息
             for i in range(user_msg_index, -1, -1):
                 if i < len(messages) and messages[i]['role'] == 'user':
                     target_user_msg = messages[i]['content']
                     target_user_idx = i
                     break
         else:
-            # 兼容旧逻辑：找最后一条用户消息
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]['role'] == 'user':
                     target_user_msg = messages[i]['content']
@@ -632,19 +884,15 @@ def handle_regenerate(data):
             emit('error', {"message": "找不到用户消息"})
             return
         
-        # 使用到目标用户消息之前的历史
         history = messages[:target_user_idx]
         
-        # 删除该用户消息之后的所有AI回复
         messages_to_keep = []
         for i, msg in enumerate(messages):
             if i <= target_user_idx:
                 messages_to_keep.append(msg)
         
-        # 更新会话消息
         session['messages'] = messages_to_keep
         
-        # 流式响应
         start_time = time.time()
         full_response = ""
         thinking_content = ""
@@ -673,12 +921,11 @@ def handle_regenerate(data):
         duration = time.time() - start_time
         logger.info(f"重新生成完成，耗时: {duration:.2f}s")
         
-        # 保存新的AI回复
         response_with_thinking = full_response
         if thinking_content:
             response_with_thinking = f"<thinking>{thinking_content}</thinking>\n{full_response}"
         
-        chat_history.add_message(session_id, 'assistant', response_with_thinking, duration)
+        chat_history.add_message(username, session_id, 'assistant', response_with_thinking, duration)
         
         emit('stream_end', {"duration": round(duration, 2), "thinking": thinking_content})
         
@@ -690,13 +937,20 @@ def handle_regenerate(data):
 @socketio.on('switch_model')
 def handle_switch_model(data):
     """切换模型"""
+    username = data.get('username')
+    if not username or username not in user_agents:
+        emit('error', {"message": "请先登录"})
+        return
+    
+    agent_manager = get_user_agent(username)
+    
     try:
         model_id = data.get('model_id')
         if not model_id:
             emit('error', {"message": "模型ID不能为空"})
             return
         
-        logger.info(f"切换模型: {model_id}")
+        logger.info(f"切换模型: {model_id} (用户: {username})")
         agent_manager.switch_model(model_id)
         emit('model_switched', {"model_id": model_id})
     except Exception as e:
@@ -707,12 +961,14 @@ def handle_switch_model(data):
 @socketio.on('stop_generation')
 def handle_stop_generation():
     """停止生成"""
-    try:
-        logger.info("收到停止生成请求")
-        agent_manager.stop_generation()
-    except Exception as e:
-        logger.error(f"停止生成失败: {e}")
-        emit('error', {"message": str(e)})
+    username = session.get('username') if hasattr(session, 'get') else None
+    if username and username in user_agents:
+        try:
+            logger.info(f"收到停止生成请求 (用户: {username})")
+            user_agents[username].stop_generation()
+        except Exception as e:
+            logger.error(f"停止生成失败: {e}")
+            emit('error', {"message": str(e)})
 
 
 if __name__ == '__main__':
@@ -728,8 +984,12 @@ if __name__ == '__main__':
 
 
 @app.route('/api/memory/process', methods=['POST'])
+@require_login
 def process_memories_manual():
     """手动触发短期记忆处理"""
+    username = get_current_user()
+    agent_manager = get_user_agent(username)
+    
     try:
         if agent_manager.memory_system:
             agent_manager.memory_system.process_short_term_to_long_term()

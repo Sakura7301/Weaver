@@ -1,5 +1,5 @@
 """
-对话历史管理
+对话历史管理 - 支持用户隔离
 """
 import json
 import os
@@ -12,39 +12,73 @@ os.makedirs(HISTORY_DIR, exist_ok=True)
 
 class ChatHistory:
     def __init__(self):
-        self.sessions = {}
+        self.sessions = {}  # 格式: {username: {session_id: session_data}}
         self.load_all()
     
-    def load_all(self):
-        """加载所有历史记录"""
-        logger.debug("加载历史记录")
-        for filename in os.listdir(HISTORY_DIR):
-            if filename.endswith('.json'):
-                session_id = filename[:-5]
-                try:
-                    with open(os.path.join(HISTORY_DIR, filename), 'r', encoding='utf-8') as f:
-                        self.sessions[session_id] = json.load(f)
-                except Exception as e:
-                    logger.error(f"加载历史失败: {filename} - {e}")
+    def _get_user_dir(self, username: str) -> str:
+        """获取用户专属目录"""
+        user_dir = os.path.join(HISTORY_DIR, username)
+        os.makedirs(user_dir, exist_ok=True)
+        return user_dir
     
-    def create_session(self):
-        """创建新对话"""
+    def load_all(self):
+        """加载所有历史记录（按用户隔离）"""
+        logger.debug("加载历史记录")
+        self.sessions = {}
+        
+        # 遍历用户目录
+        if not os.path.exists(HISTORY_DIR):
+            return
+        
+        for username in os.listdir(HISTORY_DIR):
+            user_dir = os.path.join(HISTORY_DIR, username)
+            if not os.path.isdir(user_dir):
+                continue
+            
+            self.sessions[username] = {}
+            
+            for filename in os.listdir(user_dir):
+                if filename.endswith('.json'):
+                    session_id = filename[:-5]
+                    try:
+                        with open(os.path.join(user_dir, filename), 'r', encoding='utf-8') as f:
+                            self.sessions[username][session_id] = json.load(f)
+                    except Exception as e:
+                        logger.error(f"加载历史失败: {filename} - {e}")
+    
+    def create_session(self, username: str):
+        """创建新对话（指定用户）"""
+        if not username:
+            raise ValueError("用户名不能为空")
+        
+        if username not in self.sessions:
+            self.sessions[username] = {}
+        
         session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.sessions[session_id] = {
+        self.sessions[username][session_id] = {
             "title": "新对话",
             "messages": []
         }
-        logger.info(f"创建新对话: {session_id}")
+        self.save_session(username, session_id)
+        logger.info(f"创建新对话: {username}/{session_id}")
         return session_id
     
-    def get_session(self, session_id: str):
+    def get_session(self, username: str, session_id: str):
         """获取对话"""
-        return self.sessions.get(session_id, {"title": "新对话", "messages": []})
+        if not username or username not in self.sessions:
+            return {"title": "新对话", "messages": []}
+        return self.sessions[username].get(session_id, {"title": "新对话", "messages": []})
     
-    def add_message(self, session_id: str, role: str, content: str, duration: float = None):
+    def add_message(self, username: str, session_id: str, role: str, content: str, duration: float = None):
         """添加消息"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = {"title": "新对话", "messages": []}
+        if not username:
+            raise ValueError("用户名不能为空")
+        
+        if username not in self.sessions:
+            self.sessions[username] = {}
+        
+        if session_id not in self.sessions[username]:
+            self.sessions[username][session_id] = {"title": "新对话", "messages": []}
         
         msg = {
             "role": role,
@@ -55,52 +89,74 @@ class ChatHistory:
         if duration is not None:
             msg["duration"] = duration
         
-        self.sessions[session_id]["messages"].append(msg)
+        self.sessions[username][session_id]["messages"].append(msg)
         
         # 自动生成标题
-        if len(self.sessions[session_id]["messages"]) == 1 and role == "user":
+        if len(self.sessions[username][session_id]["messages"]) == 1 and role == "user":
             title = content[:30] + ("..." if len(content) > 30 else "")
-            self.sessions[session_id]["title"] = title
+            self.sessions[username][session_id]["title"] = title
         
-        self.save_session(session_id)
+        self.save_session(username, session_id)
     
-    def save_session(self, session_id: str):
+    def save_session(self, username: str, session_id: str):
         """保存对话"""
-        filename = os.path.join(HISTORY_DIR, f"{session_id}.json")
+        if not username or username not in self.sessions:
+            return
+        
+        user_dir = self._get_user_dir(username)
+        filename = os.path.join(user_dir, f"{session_id}.json")
+        
         with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(self.sessions[session_id], f, ensure_ascii=False, indent=2)
-        logger.debug(f"保存对话: {session_id}")
+            json.dump(self.sessions[username][session_id], f, ensure_ascii=False, indent=2)
+        logger.debug(f"保存对话: {username}/{session_id}")
     
-    def get_all_sessions(self):
-        """获取所有对话列表"""
+    def get_all_sessions(self, username: str):
+        """获取指定用户的所有对话列表"""
+        if not username or username not in self.sessions:
+            return []
+        
         return [
             {"id": sid, "title": data["title"]}
-            for sid, data in sorted(self.sessions.items(), reverse=True)
+            for sid, data in sorted(self.sessions[username].items(), reverse=True)
         ]
     
-    def delete_session(self, session_id: str):
+    def delete_session(self, username: str, session_id: str):
         """删除对话"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            filename = os.path.join(HISTORY_DIR, f"{session_id}.json")
-            if os.path.exists(filename):
-                os.remove(filename)
-            logger.info(f"删除对话: {session_id}")
-    
-    def rename_session(self, session_id: str, new_title: str):
-        """重命名对话"""
-        if session_id in self.sessions:
-            self.sessions[session_id]["title"] = new_title
-            self.save_session(session_id)
-            logger.info(f"重命名对话: {session_id} -> {new_title}")
-
-    def clear_all_sessions(self):
-        """清空所有对话"""
-        # 删除所有文件
-        for session_id in list(self.sessions.keys()):
-            filename = os.path.join(HISTORY_DIR, f"{session_id}.json")
-            if os.path.exists(filename):
-                os.remove(filename)
+        if not username or username not in self.sessions:
+            return
         
-        self.sessions.clear()
-        logger.info("清空所有对话历史")
+        if session_id in self.sessions[username]:
+            del self.sessions[username][session_id]
+            user_dir = self._get_user_dir(username)
+            filename = os.path.join(user_dir, f"{session_id}.json")
+            if os.path.exists(filename):
+                os.remove(filename)
+            logger.info(f"删除对话: {username}/{session_id}")
+    
+    def rename_session(self, username: str, session_id: str, new_title: str):
+        """重命名对话"""
+        if not username or username not in self.sessions:
+            return
+        
+        if session_id in self.sessions[username]:
+            self.sessions[username][session_id]["title"] = new_title
+            self.save_session(username, session_id)
+            logger.info(f"重命名对话: {username}/{session_id} -> {new_title}")
+
+    def clear_all_sessions(self, username: str):
+        """清空指定用户的所有对话"""
+        if not username:
+            return
+        
+        user_dir = self._get_user_dir(username)
+        
+        # 删除所有文件
+        if username in self.sessions:
+            for session_id in list(self.sessions[username].keys()):
+                filename = os.path.join(user_dir, f"{session_id}.json")
+                if os.path.exists(filename):
+                    os.remove(filename)
+            
+            self.sessions[username].clear()
+        
+        logger.info(f"清空用户 {username} 的所有对话历史")
