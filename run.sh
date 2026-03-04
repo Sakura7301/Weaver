@@ -4,17 +4,15 @@
 # ============================================================================
 # Python 应用进程管理脚本
 # 用法: ./run.sh [start|stop|restart|status]
-# 
-# 注：如使用虚拟环境，需要自行修改
 # ============================================================================
 
 # 配置参数 ← 改这里
-APP_DIR="/home/alex/Desktop/Weaver"                        # Python程序所在目录
-APP_FILE="app.py"                     # 启动文件名
-APP_NAME="Weaver"                     # 应用名称（用于日志文件命名和进程搜索）
-VENV_ACTIVATE="$HOME/alex/bin/activate"  # 虚拟环境activate路径
+APP_FILE="app.py"                           # 启动文件名
+APP_NAME="Weaver"                           # 应用名称（用于日志文件命名和进程搜索）
+VENV_ACTIVATE="$HOME/alex/bin/activate"     # 虚拟环境路径，不使用则留空
 
 # 以下不需要改
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_BIN="python3"
 LOG_DIR="$APP_DIR/logs"
 PID_FILE="$APP_DIR/.${APP_NAME}.pid"
@@ -59,18 +57,13 @@ start_process() {
         return 0
     fi
 
-    if [ ! -d "$APP_DIR" ]; then
-        echo -e "${RED}✗ 错误: 目录不存在 $APP_DIR${NC}"
-        exit 1
-    fi
-
     if [ ! -f "$APP_DIR/$APP_FILE" ]; then
         echo -e "${RED}✗ 错误: 找不到启动文件 $APP_DIR/$APP_FILE${NC}"
         exit 1
     fi
 
-    # 检查虚拟环境
-    if [ ! -f "$VENV_ACTIVATE" ]; then
+    # 检查虚拟环境（仅在配置了路径时）
+    if [ -n "$VENV_ACTIVATE" ] && [ ! -f "$VENV_ACTIVATE" ]; then
         echo -e "${RED}✗ 错误: 找不到虚拟环境 $VENV_ACTIVATE${NC}"
         exit 1
     fi
@@ -85,8 +78,12 @@ start_process() {
 
     cd "$APP_DIR" || exit 1
 
-    # 激活虚拟环境后启动
-    nohup bash -c "source ${VENV_ACTIVATE} && ${PYTHON_BIN} ${APP_FILE}" >> "$log_file" 2>&1 &
+    # 根据是否配置虚拟环境选择启动方式
+    if [ -n "$VENV_ACTIVATE" ]; then
+        nohup bash -c "source ${VENV_ACTIVATE} && ${PYTHON_BIN} ${APP_FILE}" >> "$log_file" 2>&1 &
+    else
+        nohup ${PYTHON_BIN} ${APP_FILE} >> "$log_file" 2>&1 &
+    fi
     local new_pid=$!
 
     echo "$new_pid" > "$PID_FILE"
@@ -94,7 +91,11 @@ start_process() {
     sleep 1
 
     if ps -p "$new_pid" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ 虚拟环境: $VENV_ACTIVATE${NC}"
+        if [ -n "$VENV_ACTIVATE" ]; then
+            echo -e "${GREEN}✓ 虚拟环境: $VENV_ACTIVATE${NC}"
+        else
+            echo -e "${GREEN}✓ 虚拟环境: 未使用${NC}"
+        fi
         echo -e "${GREEN}✓ 程序已启动，进程ID: $new_pid${NC}"
         echo -e "${GREEN}✓ 日志文件: $log_file${NC}"
         return 0
