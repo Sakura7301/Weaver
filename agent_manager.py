@@ -619,7 +619,7 @@ class AgentManager:
             self.agent = Agent(
                 model,
                 system_prompt=CORE_MEMORY_INSTRUCTIONS,
-                tools=[self.search_memory_tool, self.save_memory_tool]
+                tools=self.all_tools
             )
             
             logger.info(f"Agent初始化成功（模型: {self.current_model}，用户: {self.username}）")
@@ -647,34 +647,161 @@ class AgentManager:
             raise
     
     def _create_memory_tools(self):
-        """创建记忆工具"""
+        """创建所有工具（包括记忆工具和tools.py中的工具）"""
         from pydantic_ai import Tool
-        
+
         @Tool
         def search_memory_tool(query: str) -> str:
             """搜索长期记忆中的相关信息。"""
             if not self.memory_system:
                 return "记忆系统未启用"
-            
+
             results = self.memory_system.search_long_term(query, top_k=5)
-            
+
             if not results:
                 return "未找到相关记忆"
-            
+
             memories = [f"- {r['content']} (相关度: {r['score']:.2f})" for r in results]
-            return "找到相关记忆:\n" + "\n".join(memories)
-        
+            return "找到相关记忆:" + "".join(memories)
+
         @Tool
         def save_memory_tool(content: str) -> str:
             """保存重要信息到长期记忆。"""
             if not self.memory_system:
                 return "记忆系统未启用"
-            
+
             success = self.memory_system.save_long_term(content)
             return "已保存记忆" if success else "保存失败"
-        
+
+        # 从tools.py导入所有工具函数并包装为Tool
+        @Tool
+        def fetch_webpage_tool(url: str) -> str:
+            """爬取网页并提取文本内容。"""
+            return tools.fetch_webpage(url)
+
+        @Tool
+        def web_search_tool(query: str, max_results: int = 3) -> str:
+            """搜索网络获取实时信息。"""
+            return tools.web_search(query, max_results)
+
+        @Tool
+        def get_weather_tool(city: str) -> str:
+            """获取指定城市的天气信息。"""
+            return tools.get_weather(city)
+
+        @Tool
+        def get_ip_info_tool(ip: str = "") -> str:
+            """获取 IP 地址信息（留空获取本机公网IP）。"""
+            return tools.get_ip_info(ip)
+
+        @Tool
+        def get_current_time_tool() -> str:
+            """获取当前日期和时间。"""
+            return tools.get_current_time()
+
+        @Tool
+        def date_calculator_tool(date1: str, date2: str = "", operation: str = "diff") -> str:
+            """日期计算器。支持计算日期差值、加减天数。"""
+            return tools.date_calculator(date1, date2, operation)
+
+        @Tool
+        def calculate_tool(expression: str) -> str:
+            """执行数学计算。"""
+            return tools.calculate(expression)
+
+        @Tool
+        def unit_convert_tool(value: float, from_unit: str, to_unit: str) -> str:
+            """单位换算器（长度、重量、温度、体积、数据）。"""
+            return tools.unit_convert(value, from_unit, to_unit)
+
+        @Tool
+        def random_generator_tool(mode: str = "number", min_val: int = 1, max_val: int = 100, count: int = 1, length: int = 8, chars: str = "") -> str:
+            """随机生成器（随机数、随机选择、随机密码、UUID）。"""
+            return tools.random_generator(mode, min_val, max_val, count, length, chars)
+
+        @Tool
+        def read_file_tool(filepath: str, max_lines: int = 100) -> str:
+            """读取文本文件内容。"""
+            return tools.read_file(filepath, max_lines)
+
+        @Tool
+        def write_file_tool(filepath: str, content: str, append: bool = False) -> str:
+            """写入文本文件。"""
+            return tools.write_file(filepath, content, append)
+
+        @Tool
+        def list_directory_tool(path: str = ".") -> str:
+            """列出目录内容。"""
+            return tools.list_directory(path)
+
+        @Tool
+        def text_hash_tool(text: str, algorithm: str = "md5") -> str:
+            """计算文本哈希值（md5, sha1, sha256, sha512）。"""
+            return tools.text_hash(text, algorithm)
+
+        @Tool
+        def base64_codec_tool(text: str, operation: str = "encode") -> str:
+            """Base64 编解码。"""
+            return tools.base64_codec(text, operation)
+
+        @Tool
+        def url_codec_tool(text: str, operation: str = "encode") -> str:
+            """URL 编解码。"""
+            return tools.url_codec(text, operation)
+
+        @Tool
+        def word_count_tool(text: str) -> str:
+            """统计文本字数、行数、字符数。"""
+            return tools.word_count(text)
+
+        @Tool
+        def extract_links_tool(text: str) -> str:
+            """从文本中提取 URL 链接。"""
+            return tools.extract_links(text)
+
+        @Tool
+        def text_replace_tool(text: str, old: str, new: str, count: int = -1) -> str:
+            """文本替换。"""
+            return tools.text_replace(text, old, new, count)
+
+        @Tool
+        def system_info_tool() -> str:
+            """获取系统信息。"""
+            return tools.system_info()
+
+        @Tool
+        def ping_host_tool(host: str, count: int = 4) -> str:
+            """Ping 主机测试连通性。"""
+            return tools.ping_host(host, count)
+
         self.search_memory_tool = search_memory_tool
         self.save_memory_tool = save_memory_tool
+
+        # 收集所有工具
+        self.all_tools = [
+            search_memory_tool,
+            save_memory_tool,
+            fetch_webpage_tool,
+            web_search_tool,
+            get_weather_tool,
+            get_ip_info_tool,
+            get_current_time_tool,
+            date_calculator_tool,
+            calculate_tool,
+            unit_convert_tool,
+            random_generator_tool,
+            read_file_tool,
+            write_file_tool,
+            list_directory_tool,
+            text_hash_tool,
+            base64_codec_tool,
+            url_codec_tool,
+            word_count_tool,
+            extract_links_tool,
+            text_replace_tool,
+            system_info_tool,
+            ping_host_tool
+        ]
     
     def fetch_models(self) -> List[Dict]:
         """获取可用模型列表"""
